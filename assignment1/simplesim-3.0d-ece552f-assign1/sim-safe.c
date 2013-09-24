@@ -459,8 +459,8 @@ int r_out[2], r_in[3];
 //            printf("UNICYCLE r_in[0]= %d, r_in[1]= %d, r_in[2]= %d, r_out[0]= %d, r_out[1]= %d, sim_num_insn= %d, reg_ready[i]= %d, i= %d\n", r_in[0], r_in[1], r_in[2], r_out[0], r_out[1], sim_num_insn, reg_ready_q1[r_in[i]], i);
             sim_num_RAW_hazard_q1++; 
             sim_num_RAW_hazard_q1_stall_1++; 
-	    for(j = 0; j < 3; j++) 
-	      reg_ready_q1[r_in [j]] = 0;
+	    for(j = 0; j < MD_TOTAL_REGS; j++) 
+	      reg_ready_q1[j] = 0;
 	    //sim_num_insn = sim_num_insn + 1;
 	    
 	    break;
@@ -469,8 +469,8 @@ int r_out[2], r_in[3];
   //          printf("BICYCLE r_in[0]= %d, r_in[1]= %d, r_in[2]= %d, r_out[0]= %d, r_out[1]= %d, sim_num_insn= %d, reg_ready[i]= %d, i= %d\n", r_in[0], r_in[1], r_in[2], r_out[0], r_out[1], sim_num_insn, reg_ready_q1[r_in[i]], i);
 	    sim_num_RAW_hazard_q1++; 
             sim_num_RAW_hazard_q1_stall_2++; 
-	    for(j = 0; j < 3; j++) 
-	      reg_ready_q1[r_in [j]] = 0;
+	    for(j = 0; j < MD_TOTAL_REGS; j++) 
+	      reg_ready_q1[j] = 0;
 	    //sim_num_insn = sim_num_insn + 2;
 	    break;
          }
@@ -480,16 +480,16 @@ int r_out[2], r_in[3];
 	 if (r_in[i] != DNA && reg_ready_q2 [r_in [i]] == sim_num_insn+1) {
             sim_num_RAW_hazard_q2++; 
             sim_num_RAW_hazard_q2_stall_1++;
-	    for(j = 0; j < 3; j++) 
-	    	reg_ready_q1[r_in [j]] = 0;
+	    for(j = 0; j < MD_TOTAL_REGS; j++) 
+	    	reg_ready_q2[j] = 0;
 	    //sim_num_insn = sim_num_insn + 1; 
 	    break;
          }
          else if (r_in[i] != DNA && reg_ready_q2 [r_in [i]] == sim_num_insn+2) {
             sim_num_RAW_hazard_q2++; 
             sim_num_RAW_hazard_q2_stall_2++;
-	    for(j = 0; j < 3; j++) 
-	    	reg_ready_q1[r_in [j]] = 0;
+	    for(j = 0; j < MD_TOTAL_REGS; j++) 
+	    	reg_ready_q3[j] = 0;
 	    //sim_num_insn = sim_num_insn + 2; 
 	    break;
          }
@@ -499,16 +499,16 @@ int r_out[2], r_in[3];
 	 if (r_out[i] != DNA && reg_ready_q3 [r_out [i]] == sim_num_insn+1 && !(MD_OP_FLAGS(op)&F_MEM) ) {
             sim_num_WAW_hazard_q3++;
 	    sim_num_WAW_hazard_q3_stall_1++; 
-	    for(j = 0; j < 3; j++) 
-	    	reg_ready_q1[r_in [j]] = 0;
+	    for(j = 0; j < MD_TOTAL_REGS; j++) 
+	    	reg_ready_q3[j] = 0;
 	    //sim_num_insn = sim_num_insn + 2;
 	    break;
          }
-         else if (r_out[i] != DNA && reg_ready_q2 [r_out [i]] == sim_num_insn+2 && !(MD_OP_FLAGS(op)&F_MEM) ) {
+         else if (r_out[i] != DNA && reg_ready_q3 [r_out [i]] == sim_num_insn+2 && !(MD_OP_FLAGS(op)&F_MEM) ) {
             sim_num_WAW_hazard_q3++;
 	    sim_num_WAW_hazard_q3_stall_2++;
-	    for(j = 0; j < 3; j++) 
-	    	reg_ready_q1[r_in [j]] = 0;
+	    for(j = 0; j < MD_TOTAL_REGS; j++) 
+	    	reg_ready_q3[j] = 0;
 	    //sim_num_insn = sim_num_insn + 1;  
 	    break;
          }
