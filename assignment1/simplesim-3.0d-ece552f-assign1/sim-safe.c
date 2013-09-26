@@ -78,11 +78,15 @@ static counter_t sim_num_WAW_hazard_q3;
 static counter_t sim_num_WAW_hazard_q3_stall_1;
 static counter_t sim_num_WAW_hazard_q3_stall_2;
 static counter_t sim_num_structural_hazard_q3;
+static counter_t sim_num_structural_hazard_q3_stall_1;
+static counter_t sim_num_structural_hazard_q3_stall_2;
 
 static counter_t reg_ready_q1[MD_TOTAL_REGS];
 static counter_t reg_ready_q2[MD_TOTAL_REGS];
 static counter_t reg_ready_q3[MD_TOTAL_REGS];
-static counter_t wb_stage_ready;
+static counter_t wb_hazard_occurs;
+static counter_t num_consecutive_mem;
+
 /* ECE552 Assignment 1 - STATS COUNTERS - END */
 
 /*
@@ -192,6 +196,14 @@ sim_reg_stats(struct stat_sdb_t *sdb)
 		   "total number of structural hazards (q3)",
 		   &sim_num_structural_hazard_q3, sim_num_structural_hazard_q3, NULL);
 
+  stat_reg_counter(sdb, "sim_num_structural_hazard_q3_stall_1",
+		   "total number of structural hazards with 1 cycle stall (q3)",
+		   &sim_num_structural_hazard_q3_stall_1, sim_num_structural_hazard_q3_stall_1, NULL);		   
+
+  stat_reg_counter(sdb, "sim_num_structural_hazard_q3_stall_2",
+		   "total number of structural hazards with 2 cycle stall (q3)",
+		   &sim_num_structural_hazard_q3_stall_2, sim_num_structural_hazard_q3_stall_2, NULL);		   
+
   stat_reg_formula(sdb, "CPI_from_RAW_hazard_q1",
 		   "CPI from RAW hazard (q1)",
 		   "(sim_num_insn+sim_num_RAW_hazard_q1_stall_1+2*sim_num_RAW_hazard_q1_stall_2)/sim_num_insn", NULL);
@@ -203,7 +215,7 @@ sim_reg_stats(struct stat_sdb_t *sdb)
   /* Include both WAW and structural hazards in your CPI computation */
   stat_reg_formula(sdb, "CPI_from_WAW_and_Structural_hazard_q3",
 		   "CPI from WAW and structural hazards (q3)",
-		   "(sim_num_insn+2*sim_num_WAW_hazard_q3_stall_2+sim_num_structural_hazard_q3+sim_num_WAW_hazard_q3_stall_1)/sim_num_insn", NULL);
+		   "(sim_num_insn+2*sim_num_WAW_hazard_q3_stall_2+sim_num_structural_hazard_q3_stall_1+2*sim_num_structural_hazard_q3_stall_2+sim_num_WAW_hazard_q3_stall_1)/sim_num_insn", NULL);
 
   /* ECE552 Assignment 1 - END CODE */
 
@@ -373,7 +385,6 @@ int r_out[2], r_in[3];
 
   /* set up initial default next PC */
   regs.regs_NPC = regs.regs_PC + sizeof(md_inst_t);
-
   /* check for DLite debugger entry condition */
   if (dlite_check_break(regs.regs_PC, /* !access */0, /* addr */0, 0, 0))
     dlite_main(regs.regs_PC - sizeof(md_inst_t),
@@ -449,29 +460,22 @@ int r_out[2], r_in[3];
 	}
 
       /* ECE552 Assignment 1 - BEGIN CODE*/
-     // if(sim_num_insn>=178415 && sim_num_insn<=178419)
-     // 	printf("print r_in[0]= %d, r_in[1]= %d, r_in[2]= %d, r_out[0]= %d, r_out[1]= %d, sim_num_insn= %d\n", r_in[0], r_in[1], r_in[2], r_out[0], r_out[1], sim_num_insn);
       int i;
       int j;
       for (i = 0; i < 3; i++) {
         //Q1
 	 if ((r_in[i] != DNA) && (reg_ready_q1 [r_in [i]] == sim_num_insn+1)) {
-//            printf("UNICYCLE r_in[0]= %d, r_in[1]= %d, r_in[2]= %d, r_out[0]= %d, r_out[1]= %d, sim_num_insn= %d, reg_ready[i]= %d, i= %d\n", r_in[0], r_in[1], r_in[2], r_out[0], r_out[1], sim_num_insn, reg_ready_q1[r_in[i]], i);
             sim_num_RAW_hazard_q1++; 
             sim_num_RAW_hazard_q1_stall_1++; 
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	      reg_ready_q1[j] = 0;
-	    //sim_num_insn = sim_num_insn + 1;
-	    
 	    break;
          }
          else if ((r_in[i] != DNA) && (reg_ready_q1 [r_in [i]] == sim_num_insn+2)) {
-  //          printf("BICYCLE r_in[0]= %d, r_in[1]= %d, r_in[2]= %d, r_out[0]= %d, r_out[1]= %d, sim_num_insn= %d, reg_ready[i]= %d, i= %d\n", r_in[0], r_in[1], r_in[2], r_out[0], r_out[1], sim_num_insn, reg_ready_q1[r_in[i]], i);
 	    sim_num_RAW_hazard_q1++; 
             sim_num_RAW_hazard_q1_stall_2++; 
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	      reg_ready_q1[j] = 0;
-	    //sim_num_insn = sim_num_insn + 2;
 	    break;
          }
       }
@@ -482,7 +486,6 @@ int r_out[2], r_in[3];
             sim_num_RAW_hazard_q2_stall_1++;
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	    	reg_ready_q2[j] = 0;
-	    //sim_num_insn = sim_num_insn + 1; 
 	    break;
          }
          else if (r_in[i] != DNA && reg_ready_q2 [r_in [i]] == sim_num_insn+2) {
@@ -490,7 +493,6 @@ int r_out[2], r_in[3];
             sim_num_RAW_hazard_q2_stall_2++;
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	    	reg_ready_q3[j] = 0;
-	    //sim_num_insn = sim_num_insn + 2; 
 	    break;
          }
       }
@@ -501,7 +503,6 @@ int r_out[2], r_in[3];
 	    sim_num_WAW_hazard_q3_stall_1++; 
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	    	reg_ready_q3[j] = 0;
-	    //sim_num_insn = sim_num_insn + 2;
 	    break;
          }
          else if (r_out[i] != DNA && reg_ready_q3 [r_out [i]] == sim_num_insn+2 && !(MD_OP_FLAGS(op)&F_MEM) ) {
@@ -509,13 +510,20 @@ int r_out[2], r_in[3];
 	    sim_num_WAW_hazard_q3_stall_2++;
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	    	reg_ready_q3[j] = 0;
-	    //sim_num_insn = sim_num_insn + 1;  
 	    break;
          }
-	 else if (((wb_stage_ready == sim_num_insn + 1) && !(MD_OP_FLAGS(op)&F_MEM)) && i==1) {
+	 else if (((wb_hazard_occurs == sim_num_insn) && !(MD_OP_FLAGS(op)&F_MEM)) && i==1) {
+	    //if more than one consecutive memory operation followed by an alu operation then we have a two cycle stall
+            //if we have one memory operation followed by an alu operation 2 cycles later we will have a one cycle stall
+	    if (num_consecutive_mem > 1) 
+	       sim_num_structural_hazard_q3_stall_2++;
+	    else 
+	       sim_num_structural_hazard_q3_stall_1++;
 	    sim_num_structural_hazard_q3++;
-	    wb_stage_ready = 0;
-	    break;
+	    num_consecutive_mem = 0;
+	    wb_hazard_occurs = 0;
+	    break;	  
+	    	
 	 }
       }
       /* ECE552 Assignment 1 - END CODE*/
@@ -540,9 +548,19 @@ int r_out[2], r_in[3];
       if (r_out[1] != DNA && ((MD_OP_FLAGS(op)&F_MEM) && (MD_OP_FLAGS(op) & F_LOAD)))
 	 reg_ready_q3[r_out[1]] = sim_num_insn + 3;	 
       
-      if (MD_OP_FLAGS(op)&F_MEM) 
-         wb_stage_ready = sim_num_insn + 3;
-	        
+      //Q3 Structural Hazards
+
+      //Sets the counter for when there can be a structural hazard (differs if it is consecutive memory operations)
+      if (MD_OP_FLAGS(op)&F_MEM ){ 
+          if(num_consecutive_mem == 0)
+	  	wb_hazard_occurs = sim_num_insn + 2;
+	  else
+		wb_hazard_occurs = sim_num_insn + 1;
+	  num_consecutive_mem++;
+
+      }
+      else
+	  num_consecutive_mem = 0;
       /* ECE552 Assignment 1 - END CODE*/
 
       /* check for DLite debugger entry condition */
