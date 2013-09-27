@@ -482,7 +482,10 @@ int r_out[2], r_in[3];
       for(i = 0; i< 3; i++){
         //Q2
 	 if (r_in[i] != DNA && reg_ready_q2 [r_in [i]] == sim_num_insn+1) {
-            sim_num_RAW_hazard_q2++; 
+            //if instruction is a store then the first input register can go through the WM bypass and will not stall
+	    if(i==0 && MD_OP_FLAGS(op)&F_MEM && MD_OP_FLAGS(op)&F_STORE)
+		continue;
+	    sim_num_RAW_hazard_q2++; 
             sim_num_RAW_hazard_q2_stall_1++;
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	    	reg_ready_q2[j] = 0;
@@ -499,8 +502,13 @@ int r_out[2], r_in[3];
       for(i = 0; i< 2; i++){
         //Q3
 	 if (r_out[i] != DNA && reg_ready_q3 [r_out [i]] == sim_num_insn+1 && !(MD_OP_FLAGS(op)&F_MEM) ) {
-            sim_num_WAW_hazard_q3++;
-	    sim_num_WAW_hazard_q3_stall_1++; 
+	    //checks if more than 1 consecutive memory operation and WAW then should stall for 2 (to avoid structural hazard after first stall)            
+	    if(num_consecutive_mem > 1)
+	      sim_num_WAW_hazard_q3_stall_2++;
+	    else
+	      sim_num_WAW_hazard_q3_stall_1++;
+		 
+	    sim_num_WAW_hazard_q3++;
 	    for(j = 0; j < MD_TOTAL_REGS; j++) 
 	    	reg_ready_q3[j] = 0;
 	    break;
