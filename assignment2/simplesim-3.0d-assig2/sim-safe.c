@@ -82,7 +82,7 @@ static counter_t sim_num_mispred_2level = 0;	//number of mispredicted branches o
 static counter_t sim_num_mispred_openend = 0;	//number of mispredicted branches of the open-ended predictor
 
 
-
+#define NUM_SHIFT 3
 
 /* ECE552 Assignment 2 - STATS COUNTERS - END */ 
 
@@ -306,12 +306,22 @@ sim_main(void)
 
 /* ECE552 Assignment 2 - BEGIN  CODE */
   //referenced by 12 bits of PC
-  int i;
+  int i, j;
   int saturating_counter[4096];
+  int bht[512];
+  int pht[64][8];
   //initializing to weakly not taken
   for(i=0;i<4096;i++)
 	saturating_counter[i]=1;
 
+  for(i=0; i<512; i++)
+	bht[i]=0;
+
+  for(i=0;i<64;i++){
+  	for(j=0;j<8;j++)
+		pht[i][j]=1;
+  }
+   
 /* ECE552 Assignment 2 - END CODE */      
   
   fprintf(stderr, "sim: ** starting functional simulation **\n");
@@ -387,44 +397,89 @@ sim_main(void)
 /* ECE552 Assignment 2 - BEGIN  CODE */
 //branch instruction
       int saturating_counter_index;
-      int prediction;
+      int bht_index;
+      int pht_col_index;
+      int pht_row_index;
+      int saturating_counter_prediction;
+      int two_level_prediction;
       if(MD_OP_FLAGS(op)&F_COND){
 	sim_num_br++;
-        saturating_counter_index= (regs.regs_PC>>1)&(0x0fff);
-        prediction = saturating_counter[saturating_counter_index];	
+        //saturating_counter_index = bits 14 to 3 of PC
+        saturating_counter_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
+        saturating_counter_prediction = saturating_counter[saturating_counter_index];
+        //bht_index= bits 14 to 6 of PC
+        bht_index =  ((regs.regs_PC>>NUM_SHIFT)&(0x0fff)) >> 3;
+
+        //pht_col_index = bits 5 to 3 of PC
+        pht_col_index =  (regs.regs_PC>>NUM_SHIFT) & 0x07; 
+        pht_row_index = bht[bht_index];	
+        two_level_prediction = pht[pht_row_index][pht_col_index];
        }
         	
 //branch is not taken
       if ((regs.regs_PC + sizeof(md_inst_t))== regs.regs_NPC && (MD_OP_FLAGS(op)&F_COND)){
+        //Q1
 	sim_num_mispred_static++;
-        if(prediction==0);
-        else if(prediction==1){
+        if(saturating_counter_prediction==0);
+        else if(saturating_counter_prediction==1){
 		saturating_counter[saturating_counter_index]=0;
         }
-        else if(prediction==2){
+        else if(saturating_counter_prediction==2){
 		saturating_counter[saturating_counter_index]=1;
 		sim_num_mispred_2bitsat++;
         }
-        else if(prediction==3){
+        else if(saturating_counter_prediction==3){
 		saturating_counter[saturating_counter_index]=2;
 		sim_num_mispred_2bitsat++;
         }
+
+
+        //Q2
+        bht[bht_index] = (bht[bht_index]<<1)& 0x03f;
+	if(two_level_prediction==0);
+        else if(two_level_prediction==1){
+		pht[pht_row_index][pht_col_index]=0;
+        }
+        else if(two_level_prediction==2){
+		pht[pht_row_index][pht_col_index]=1;
+		sim_num_mispred_2level++;
+        }
+        else if(two_level_prediction==3){
+		pht[pht_row_index][pht_col_index]=2;
+		sim_num_mispred_2level++;
+        }
+                
       }
+
+//branch taken
       else if(MD_OP_FLAGS(op)&F_COND){
-        if(prediction==0){
+        if(saturating_counter_prediction==0){
 	        saturating_counter[saturating_counter_index]=1;
 		sim_num_mispred_2bitsat++;
 	}        
-        else if(prediction==1){
+        else if(saturating_counter_prediction==1){
 		saturating_counter[saturating_counter_index]=2;
 		sim_num_mispred_2bitsat++;
         }
-        else if(prediction==2){
+        else if(saturating_counter_prediction==2){
 		saturating_counter[saturating_counter_index]=3;
         }
-        else if(prediction==3);
+        else if(saturating_counter_prediction==3);
 
-
+        //Q2
+        bht[bht_index] = ((bht[bht_index]<<1)& 0x03f)|0x01;
+	if(two_level_prediction==0){
+		pht[pht_row_index][pht_col_index]=1;
+		sim_num_mispred_2level++;
+        }
+        else if(two_level_prediction==1){
+		pht[pht_row_index][pht_col_index]=2;
+		sim_num_mispred_2level++;
+        }
+        else if(two_level_prediction==2){
+		pht[pht_row_index][pht_col_index]=3;
+        }
+        else if(two_level_prediction==3);
 
       }
       

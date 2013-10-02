@@ -1,7 +1,7 @@
 
 
 #define OUTERLOOP 5000
-#define INNERLOOP 3
+#define INNERLOOP 20
 int main()
 {
 	int i;

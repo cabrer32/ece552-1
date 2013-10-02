@@ -1,4 +1,4 @@
-cscope 15 /nfs/ug/homes-1/z/zannierj/ece552/assignment2/simplesim-3.0d-assig2               0000777056
+cscope 15 /nfs/ug/homes-1/z/zannierj/ece552/assignment2/simplesim-3.0d-assig2               0000779192
 	@bitmap.h
 
 52 #iâdeà
@@ -54989,6 +54989,12 @@ couÁ”_t
 	gsim_num_mi¥»d_Ý’’d
  = 0;
 
+85 
+	#NUM_SHIFT
+ 3
+
+	)
+
 92 
 »gs_t
  
@@ -55945,29 +55951,65 @@ md_çuÉ_ty³
 
 309 
 i
+, 
+j
 ;
 
 310 
 §tu¿tšg_couÁ”
 [4096];
 
-312 
+311 
+bht
+[512];
+
+312 
+pht
+[64][8];
+
+314 
 i
 =0;i<4096;i++)
 
-313 
+315 
 §tu¿tšg_couÁ”
 [
 i
 ]=1;
 
-317 
+317 
+i
+=0; i<512; i++)
+
+318 
+bht
+[
+i
+]=0;
+
+320 
+i
+=0;i<64;i++){
+
+321 
+j
+=0;j<8;j++)
+
+322 
+pht
+[
+i
+][
+j
+]=1;
+
+327 
 	`årštf
 (
 ¡d”r
 , "sim: ** starting functional simulation **\n");
 
-320 
+330 
 »gs
 .
 »gs_NPC
@@ -55977,7 +56019,7 @@ i
 md_š¡_t
 );
 
-323 ià(
+333 ià(
 	`dl™e_check_b»ak
 (
 »gs
@@ -55985,7 +56027,7 @@ md_š¡_t
 »gs_PC
 , 0, 0, 0, 0))
 
-324 
+334 
 	`dl™e_maš
 (
 »gs
@@ -55995,7 +56037,7 @@ md_š¡_t
 md_š¡_t
 ),
 
-325 
+335 
 »gs
 .
 »gs_PC
@@ -56005,11 +56047,11 @@ sim_num_š¢
 mem
 );
 
-326 
+336 
 TRUE
 )
 
-329 
+339 
 »gs
 .
 »gs_R
@@ -56017,11 +56059,11 @@ TRUE
 MD_REG_ZERO
 ] = 0;
 
-330 #ifdeà
+340 #ifdeà
 TARGET_ALPHA
 
 
-331 
+341 
 »gs
 .
 »gs_F
@@ -56031,7 +56073,7 @@ d
 MD_REG_ZERO
 ] = 0.0;
 
-335 
+345 
 	`MD_FETCH_INST
 (
 š¡
@@ -56043,11 +56085,11 @@ mem
 »gs_PC
 );
 
-338 
+348 
 sim_num_š¢
 ++;
 
-341 
+351 
 addr
  = 0; 
 is_wr™e
@@ -56055,13 +56097,13 @@ is_wr™e
 FALSE
 ;
 
-344 
+354 
 çuÉ
  = 
 md_çuÉ_nÚe
 ;
 
-347 
+357 
 	`MD_SET_OPCODE
 (
 Ý
@@ -56069,11 +56111,11 @@ md_çuÉ_nÚe
 š¡
 );
 
-350 
+360 
 Ý
 )
 
-352 
+362 
 	#DEFINST
 (
 OP
@@ -56099,11 +56141,11 @@ I2
 I3
 ) \
 
-353 
+363 
 OP
 : \
 
-354 
+364 
 	`SYMCAT
 (
 OP
@@ -56111,11 +56153,11 @@ OP
 _IMPL
 ); \
 
-355 ;
+365 ;
 
 	)
 
-356 
+366 
 	#DEFLINK
 (
 OP
@@ -56129,17 +56171,17 @@ MASK
 SHIFT
 ) \
 
-357 
+367 
 OP
 : \
 
-358 
+368 
 	`·nic
 ("©‹m±edØexecu‹‡†škšg opcode");
 
 	)
 
-359 
+369 
 	#CONNECT
 (
 OP
@@ -56147,13 +56189,13 @@ OP
 
 	)
 
-360 
+370 
 	#DECLARE_FAULT
 (
 FAULT
 ) \
 
-361 { 
+371 { 
 çuÉ
  = (
 FAULT
@@ -56161,21 +56203,21 @@ FAULT
 
 	)
 
-362 
+372 
 	~"machše.def
 "
 
-364 
+374 
 	`·nic
 ("attemptedoƒxecute‡ bogus opcode");
 
-367 ià(
+377 ià(
 çuÉ
  !ð
 md_çuÉ_nÚe
 )
 
-368 
+378 
 	`çl
 ("çuÉ (%dèd‘eùed @ 0x%08p", 
 çuÉ
@@ -56185,17 +56227,17 @@ md_çuÉ_nÚe
 »gs_PC
 );
 
-370 ià(
+380 ià(
 v”bo£
 )
 
-372 
+382 
 	`myårštf
 (
 ¡d”r
 , "%10n [xor: 0x%08x] @ 0x%08p: ",
 
-373 
+383 
 sim_num_š¢
 , 
 	`md_xÜ_»gs
@@ -56205,7 +56247,7 @@ sim_num_š¢
 »gs_PC
 );
 
-374 
+384 
 	`md_´št_š¢
 (
 š¡
@@ -56217,7 +56259,7 @@ sim_num_š¢
 ¡d”r
 );
 
-375 ià(
+385 ià(
 	`MD_OP_FLAGS
 (
 Ý
@@ -56225,7 +56267,7 @@ sim_num_š¢
 F_MEM
 )
 
-376 
+386 
 	`myårštf
 (
 ¡d”r
@@ -56233,13 +56275,13 @@ F_MEM
 addr
 );
 
-377 
+387 
 	`årštf
 (
 ¡d”r
 , "\n");
 
-381 ià(
+391 ià(
 	`MD_OP_FLAGS
 (
 Ý
@@ -56247,11 +56289,11 @@ addr
 F_MEM
 )
 
-383 
+393 
 sim_num_»fs
 ++;
 
-384 ià(
+394 ià(
 	`MD_OP_FLAGS
 (
 Ý
@@ -56259,21 +56301,37 @@ sim_num_»fs
 F_STORE
 )
 
-385 
+395 
 is_wr™e
  = 
 TRUE
 ;
 
-389 
+399 
 §tu¿tšg_couÁ”_šdex
 ;
 
-390 
-´ediùiÚ
+400 
+bht_šdex
 ;
 
-391 if(
+401 
+pht_cÞ_šdex
+;
+
+402 
+pht_row_šdex
+;
+
+403 
+§tu¿tšg_couÁ”_´ediùiÚ
+;
+
+404 
+two_Ëv–_´ediùiÚ
+;
+
+405 if(
 	`MD_OP_FLAGS
 (
 Ý
@@ -56281,11 +56339,67 @@ TRUE
 F_COND
 ){
 
-392 
+406 
 sim_num_br
 ++;
 
-398 ià((
+408 
+§tu¿tšg_couÁ”_šdex
+ð(
+»gs
+.
+»gs_PC
+>>
+NUM_SHIFT
+)&(0x0fff);
+
+409 
+§tu¿tšg_couÁ”_´ediùiÚ
+ = 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+];
+
+411 
+bht_šdex
+ = ((
+»gs
+.
+»gs_PC
+>>
+NUM_SHIFT
+)&(0x0fff)) >> 3;
+
+414 
+pht_cÞ_šdex
+ = (
+»gs
+.
+»gs_PC
+>>
+NUM_SHIFT
+) & 0x07;
+
+415 
+pht_row_šdex
+ = 
+bht
+[
+bht_šdex
+];
+
+416 
+two_Ëv–_´ediùiÚ
+ = 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+];
+
+420 ià((
 »gs
 .
 »gs_PC
@@ -56301,11 +56415,211 @@ md_š¡_t
 F_COND
 )){
 
-399 
+422 
 sim_num_mi¥»d_¡©ic
 ++;
 
-407 ià(
+423 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==0);
+
+424 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==1){
+
+425 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+]=0;
+
+427 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==2){
+
+428 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+]=1;
+
+429 
+sim_num_mi¥»d_2b™§t
+++;
+
+431 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==3){
+
+432 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+]=2;
+
+433 
+sim_num_mi¥»d_2b™§t
+++;
+
+438 
+bht
+[
+bht_šdex
+] = (bht[bht_index]<<1)& 0x03f;
+
+439 if(
+two_Ëv–_´ediùiÚ
+==0);
+
+440 if(
+two_Ëv–_´ediùiÚ
+==1){
+
+441 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+]=0;
+
+443 if(
+two_Ëv–_´ediùiÚ
+==2){
+
+444 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+]=1;
+
+445 
+sim_num_mi¥»d_2Ëv–
+++;
+
+447 if(
+two_Ëv–_´ediùiÚ
+==3){
+
+448 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+]=2;
+
+449 
+sim_num_mi¥»d_2Ëv–
+++;
+
+455 if(
+	`MD_OP_FLAGS
+(
+Ý
+)&
+F_COND
+){
+
+456 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==0){
+
+457 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+]=1;
+
+458 
+sim_num_mi¥»d_2b™§t
+++;
+
+460 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==1){
+
+461 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+]=2;
+
+462 
+sim_num_mi¥»d_2b™§t
+++;
+
+464 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==2){
+
+465 
+§tu¿tšg_couÁ”
+[
+§tu¿tšg_couÁ”_šdex
+]=3;
+
+467 if(
+§tu¿tšg_couÁ”_´ediùiÚ
+==3);
+
+470 
+bht
+[
+bht_šdex
+] = ((bht[bht_index]<<1)& 0x03f)|0x01;
+
+471 if(
+two_Ëv–_´ediùiÚ
+==0){
+
+472 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+]=1;
+
+473 
+sim_num_mi¥»d_2Ëv–
+++;
+
+475 if(
+two_Ëv–_´ediùiÚ
+==1){
+
+476 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+]=2;
+
+477 
+sim_num_mi¥»d_2Ëv–
+++;
+
+479 if(
+two_Ëv–_´ediùiÚ
+==2){
+
+480 
+pht
+[
+pht_row_šdex
+][
+pht_cÞ_šdex
+]=3;
+
+482 if(
+two_Ëv–_´ediùiÚ
+==3);
+
+491 ià(
 	`dl™e_check_b»ak
 (
 »gs
@@ -56313,7 +56627,7 @@ sim_num_mi¥»d_¡©ic
 »gs_NPC
 ,
 
-408 
+492 
 is_wr™e
  ? 
 ACCESS_WRITE
@@ -56321,13 +56635,13 @@ ACCESS_WRITE
 ACCESS_READ
 ,
 
-409 
+493 
 addr
 , 
 sim_num_š¢
 , sim_num_insn))
 
-410 
+494 
 	`dl™e_maš
 (
 »gs
@@ -56341,7 +56655,7 @@ sim_num_š¢
 mem
 );
 
-413 
+497 
 »gs
 .
 »gs_PC
@@ -56349,7 +56663,7 @@ mem
 »gs_NPC
 ;
 
-414 
+498 
 »gs
 .
 »gs_NPC
@@ -56357,13 +56671,13 @@ mem
 md_š¡_t
 );
 
-417 ià(
+501 ià(
 max_š¡s
  && 
 sim_num_š¢
  >= max_insts)
 
-420 
+504 
 	}
 }
 
