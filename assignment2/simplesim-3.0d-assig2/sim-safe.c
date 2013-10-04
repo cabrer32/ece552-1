@@ -81,7 +81,7 @@ static counter_t sim_num_mispred_2bitsat = 0;	//number of mispredicted branches 
 static counter_t sim_num_mispred_2level = 0;	//number of mispredicted branches of two level predictor
 static counter_t sim_num_mispred_openend = 0;	//number of mispredicted branches of the open-ended predictor
 static counter_t sim_num_mispred_gshare = 0;	//number of mispredicted branches of the open-ended predictor
-
+static counter_t sim_num_mispred_pag  = 0;
 #define NUM_SHIFT 3
 
 /* ECE552 Assignment 2 - STATS COUNTERS - END */ 
@@ -164,6 +164,9 @@ sim_reg_stats(struct stat_sdb_t *sdb)
   
   stat_reg_counter(sdb, "sim_num_mispred_gshare", "gshare preditor: number of mispredicted branches", &sim_num_mispred_gshare, sim_num_mispred_gshare, NULL);
   stat_reg_formula(sdb, "sim_br_gshare_ratio", "gshare predictor: branch misprediction rate", "sim_num_mispred_gshare / sim_num_br", NULL);	
+  
+ stat_reg_counter(sdb, "sim_num_mispred_pag", "pag preditor: number of mispredicted branches", &sim_num_mispred_pag, sim_num_mispred_pag, NULL);
+  stat_reg_formula(sdb, "sim_br_pag_ratio", "pag predictor: branch misprediction rate", "sim_num_mispred_pag / sim_num_br", NULL);	
   /* ECE552 Assignment 2 - STATS COUNTERS/FORMULAS - END */ 
 
 }
@@ -330,9 +333,20 @@ sim_main(void)
   int choose_temp_masked;
   int choose_sat_sum = 0;
   int choose_gshare_sum = 0;
+
+  int pag_global_index;
+  int pag_history_table[4096];
+  int pag_two_bit_counter[1024];
+  int pag_prediction; 
   //initializing to weakly not taken
+  for(i=0;i<4096;i++)
+	pag_history_table[i]=0;
+
+  for(i=0;i<1024;i++)
+	pag_two_bit_counter[i]=1;
+
   for(i=0;i<4096;i++) {
-	saturating_counter[i]=1;
+	saturating_counter[i]=2;
   }
   for(i=0; i<512; i++)
 	bht[i]=0;
@@ -342,7 +356,7 @@ sim_main(void)
 		pht[i][j]=1;
   }
   for(i=0;i<32768;i++) {
-	gshare_pht[i] = 1;
+	gshare_pht[i] = 2;
   }
   for(i=0;i<4096;i++) 
 	choose_last_correct[i] = 0;
@@ -434,39 +448,47 @@ sim_main(void)
         two_level_prediction = pht[pht_row_index][pht_col_index];
 	
 	//gshare
-	gshare_pht_index = ((regs.regs_PC>>NUM_SHIFT)&(0x0fff))^(gshare_ghr&0x07fff);
+	gshare_pht_index = ((regs.regs_PC>>NUM_SHIFT)&(0x07fff))^(gshare_ghr&0x07fff);
         gshare_prediction = gshare_pht[gshare_pht_index]; 
 	choose_index = (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
 	choose_temp = choose_last_correct[choose_index];
-	//for (i=0;i<4;i++) {
-	//	choose_temp_masked = choose_temp & 0x0ff;
-	//		
-	//	if (choose_temp_masked == 0x01 ){
-	//		choose_prediction = saturating_counter_prediction;
-	//		break;
-	//        }	
-	//	else if (choose_temp_masked == 0x10 ){
-	//		choose_prediction = gshare_prediction;
-	//		break;
-	//	}
-	//	choose_temp = choose_temp >> 8;	
-	//}
-	//if(i==4)
-	//	choose_prediction = gshare_prediction;
-
-	choose_sat_sum=0;
-	choose_gshare_sum=0;
-	for(i=0;i<4;i++){
-		choose_temp_masked = choose_temp &0x0ff;
-		choose_sat_sum += (choose_temp_masked & 0x0f);	
-		choose_gshare_sum += ((choose_temp_masked >> 4)&0x0f);
-		choose_temp = choose_temp>>8;
+        
+	pag_global_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
+	pag_prediction = pag_two_bit_counter[pag_history_table[pag_global_index]];
+	
+	for (i=0;i<4;i++) {
+		choose_temp_masked = choose_temp & 0x0ff;
+		choose_prediction = gshare_prediction;
+//                printf("choose_temp %x choosel_last_correct %x choose index %x\n", choose_temp_masked, choose_last_correct[choose_index], choose_index);			
+		if (choose_temp_masked == 0x01 ){
+			choose_prediction = saturating_counter_prediction;
+			break;
+	        }	
+		else if (choose_temp_masked == 0x10 ){
+			choose_prediction = gshare_prediction;
+			break;
+		}
+		choose_temp = choose_temp >> 8;	
 	}
-	if(choose_gshare_sum>=choose_sat_sum)
-		choose_prediction=gshare_prediction;
-	else
-		choose_prediction=saturating_counter_prediction;
 
+	choose_last_correct[choose_index]=choose_last_correct[choose_index] << 8;
+//	choose_sat_sum=0;
+//	choose_gshare_sum=0;
+//	for(i=0;i<4;i++){
+//		choose_temp_masked = choose_temp &0x0ff;
+//		choose_sat_sum += (choose_temp_masked & 0x0f);	
+//		choose_gshare_sum += ((choose_temp_masked >> 4)&0x0f);
+//		choose_temp = choose_temp>>8;
+//	}
+//	if(choose_gshare_sum>=choose_sat_sum)
+//		choose_prediction=gshare_prediction;
+//	else
+//		choose_prediction=saturating_counter_prediction;
+
+	
+        pag_global_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
+	pag_prediction = pag_two_bit_counter[pag_history_table[pag_global_index]];
+	
       }        	
 //branch is not taken
       if ((regs.regs_PC + sizeof(md_inst_t))== regs.regs_NPC && (MD_OP_FLAGS(op)&F_COND)){
@@ -520,10 +542,32 @@ sim_main(void)
 		sim_num_mispred_gshare++;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;
         }
+
+
+        
 	//choose
 	if (choose_prediction > 1) 
 		sim_num_mispred_openend++;
-	choose_last_correct[choose_index]=choose_last_correct[choose_index] << 8;
+
+
+	
+	if(pag_prediction==0);			
+	else if(pag_prediction==1){
+		pag_two_bit_counter[pag_history_table[pag_global_index]] = 0;
+	}
+	else if(pag_prediction==2){
+		pag_two_bit_counter[pag_history_table[pag_global_index]] = 1;
+		sim_num_mispred_pag++;
+	}
+	else if(pag_prediction==3){
+		pag_two_bit_counter[pag_history_table[pag_global_index]] = 2;
+		sim_num_mispred_pag++;
+	}
+	pag_history_table[pag_global_index] = (pag_history_table[pag_global_index] << 1)&(0x03ff);        
+	
+
+
+
 		
       }
 
@@ -583,7 +627,21 @@ sim_main(void)
 	//choose
 	if (choose_prediction < 2) 
 		sim_num_mispred_openend++;
-	choose_last_correct[choose_index]=choose_last_correct[choose_index] << 8;
+	
+	if(pag_prediction==0){
+		sim_num_mispred_pag++;
+		pag_two_bit_counter[pag_history_table[pag_global_index]] = 1;
+	}			
+	else if(pag_prediction==1){
+		sim_num_mispred_pag++;
+		pag_two_bit_counter[pag_history_table[pag_global_index]] = 2;
+	}
+	else if(pag_prediction==2){
+		pag_two_bit_counter[pag_history_table[pag_global_index]] = 3;
+	}
+	else if(pag_prediction==3);
+	pag_history_table[pag_global_index] = ((pag_history_table[pag_global_index] << 1)&(0x03ff))|(0x01);        
+	
       }
       
 
