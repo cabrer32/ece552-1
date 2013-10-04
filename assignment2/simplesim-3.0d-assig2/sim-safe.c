@@ -80,7 +80,7 @@ static counter_t sim_num_mispred_static = 0;	//number of mispredicted branches o
 static counter_t sim_num_mispred_2bitsat = 0;	//number of mispredicted branches of the 2-bit saturating counter predictor
 static counter_t sim_num_mispred_2level = 0;	//number of mispredicted branches of two level predictor
 static counter_t sim_num_mispred_openend = 0;	//number of mispredicted branches of the open-ended predictor
-
+static counter_t sim_num_mispred_gshare = 0;	//number of mispredicted branches of the open-ended predictor
 
 #define NUM_SHIFT 3
 
@@ -161,6 +161,9 @@ sim_reg_stats(struct stat_sdb_t *sdb)
 
   stat_reg_counter(sdb, "sim_num_mispred_openend", "Open-ended preditor: number of mispredicted branches", &sim_num_mispred_openend, sim_num_mispred_openend, NULL);
   stat_reg_formula(sdb, "sim_br_openend_ratio", "Open-ended predictor: branch misprediction rate", "sim_num_mispred_openend / sim_num_br", NULL);	
+  
+  stat_reg_counter(sdb, "sim_num_mispred_gshare", "gshare preditor: number of mispredicted branches", &sim_num_mispred_gshare, sim_num_mispred_gshare, NULL);
+  stat_reg_formula(sdb, "sim_br_gshare_ratio", "gshare predictor: branch misprediction rate", "sim_num_mispred_gshare / sim_num_br", NULL);	
   /* ECE552 Assignment 2 - STATS COUNTERS/FORMULAS - END */ 
 
 }
@@ -310,10 +313,27 @@ sim_main(void)
   int saturating_counter[4096];
   int bht[512];
   int pht[64][8];
+  int saturating_counter_index;
+  int bht_index;
+  int pht_col_index;
+  int pht_row_index;
+  int saturating_counter_prediction;
+  int two_level_prediction;
+  int gshare_ghr = 0;
+  int gshare_pht[32768];
+  int gshare_pht_index;
+  int gshare_prediction;
+  int choose_last_correct[4096];
+  int choose_prediction;
+  int choose_index;
+  int choose_temp;
+  int choose_temp_masked;
+  int choose_sat_sum = 0;
+  int choose_gshare_sum = 0;
   //initializing to weakly not taken
-  for(i=0;i<4096;i++)
+  for(i=0;i<4096;i++) {
 	saturating_counter[i]=1;
-
+  }
   for(i=0; i<512; i++)
 	bht[i]=0;
 
@@ -321,7 +341,11 @@ sim_main(void)
   	for(j=0;j<8;j++)
 		pht[i][j]=1;
   }
-   
+  for(i=0;i<32768;i++) {
+	gshare_pht[i] = 1;
+  }
+  for(i=0;i<4096;i++) 
+	choose_last_correct[i] = 0;
 /* ECE552 Assignment 2 - END CODE */      
   
   fprintf(stderr, "sim: ** starting functional simulation **\n");
@@ -396,12 +420,6 @@ sim_main(void)
 	}
 /* ECE552 Assignment 2 - BEGIN  CODE */
 //branch instruction
-      int saturating_counter_index;
-      int bht_index;
-      int pht_col_index;
-      int pht_row_index;
-      int saturating_counter_prediction;
-      int two_level_prediction;
       if(MD_OP_FLAGS(op)&F_COND){
 	sim_num_br++;
         //saturating_counter_index = bits 14 to 3 of PC
@@ -414,27 +432,63 @@ sim_main(void)
         pht_col_index =  (regs.regs_PC>>NUM_SHIFT) & 0x07; 
         pht_row_index = bht[bht_index];	
         two_level_prediction = pht[pht_row_index][pht_col_index];
-       }
-        	
+	
+	//gshare
+	gshare_pht_index = ((regs.regs_PC>>NUM_SHIFT)&(0x0fff))^(gshare_ghr&0x07fff);
+        gshare_prediction = gshare_pht[gshare_pht_index]; 
+	choose_index = (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
+	choose_temp = choose_last_correct[choose_index];
+	//for (i=0;i<4;i++) {
+	//	choose_temp_masked = choose_temp & 0x0ff;
+	//		
+	//	if (choose_temp_masked == 0x01 ){
+	//		choose_prediction = saturating_counter_prediction;
+	//		break;
+	//        }	
+	//	else if (choose_temp_masked == 0x10 ){
+	//		choose_prediction = gshare_prediction;
+	//		break;
+	//	}
+	//	choose_temp = choose_temp >> 8;	
+	//}
+	//if(i==4)
+	//	choose_prediction = gshare_prediction;
+
+	choose_sat_sum=0;
+	choose_gshare_sum=0;
+	for(i=0;i<4;i++){
+		choose_temp_masked = choose_temp &0x0ff;
+		choose_sat_sum += (choose_temp_masked & 0x0f);	
+		choose_gshare_sum += ((choose_temp_masked >> 4)&0x0f);
+		choose_temp = choose_temp>>8;
+	}
+	if(choose_gshare_sum>=choose_sat_sum)
+		choose_prediction=gshare_prediction;
+	else
+		choose_prediction=saturating_counter_prediction;
+
+      }        	
 //branch is not taken
       if ((regs.regs_PC + sizeof(md_inst_t))== regs.regs_NPC && (MD_OP_FLAGS(op)&F_COND)){
-        //Q1
+        //2 BIT SATURATING
 	sim_num_mispred_static++;
-        if(saturating_counter_prediction==0);
+        if(saturating_counter_prediction==0)
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
         else if(saturating_counter_prediction==1){
 		saturating_counter[saturating_counter_index]=0;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
         }
         else if(saturating_counter_prediction==2){
 		saturating_counter[saturating_counter_index]=1;
 		sim_num_mispred_2bitsat++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
         }
         else if(saturating_counter_prediction==3){
 		saturating_counter[saturating_counter_index]=2;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 		sim_num_mispred_2bitsat++;
         }
-
-
-        //Q2
+        //2 LEVEL
         bht[bht_index] = (bht[bht_index]<<1)& 0x03f;
 	if(two_level_prediction==0);
         else if(two_level_prediction==1){
@@ -448,25 +502,52 @@ sim_main(void)
 		pht[pht_row_index][pht_col_index]=2;
 		sim_num_mispred_2level++;
         }
-                
+        //gshare        
+        gshare_ghr = (gshare_ghr<<1)& 0x07fff;
+	if(gshare_prediction==0)	
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
+        else if(gshare_prediction==1){
+		gshare_pht[gshare_pht_index]=0;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
+        }
+        else if(gshare_prediction==2){
+		gshare_pht[gshare_pht_index]=1;
+		sim_num_mispred_gshare++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;
+        }
+        else if(gshare_prediction==3){
+		gshare_pht[gshare_pht_index]=2;
+		sim_num_mispred_gshare++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;
+        }
+	//choose
+	if (choose_prediction > 1) 
+		sim_num_mispred_openend++;
+	choose_last_correct[choose_index]=choose_last_correct[choose_index] << 8;
+		
       }
 
 //branch taken
       else if(MD_OP_FLAGS(op)&F_COND){
-        if(saturating_counter_prediction==0){
+        //2-bit SATURATING
+	if(saturating_counter_prediction==0){
 	        saturating_counter[saturating_counter_index]=1;
 		sim_num_mispred_2bitsat++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 	}        
         else if(saturating_counter_prediction==1){
 		saturating_counter[saturating_counter_index]=2;
 		sim_num_mispred_2bitsat++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
         }
         else if(saturating_counter_prediction==2){
 		saturating_counter[saturating_counter_index]=3;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
         }
-        else if(saturating_counter_prediction==3);
+        else if(saturating_counter_prediction==3)
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
 
-        //Q2
+        //2 LEVEL PREDICTOR
         bht[bht_index] = ((bht[bht_index]<<1)& 0x03f)|0x01;
 	if(two_level_prediction==0){
 		pht[pht_row_index][pht_col_index]=1;
@@ -480,7 +561,29 @@ sim_main(void)
 		pht[pht_row_index][pht_col_index]=3;
         }
         else if(two_level_prediction==3);
-
+	
+	//OPEN ENDED
+        gshare_ghr = ((gshare_ghr<<1)& 0x07fff) | 0x01;
+	if(gshare_prediction==0){
+		gshare_pht[gshare_pht_index]=1;
+		sim_num_mispred_gshare++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;	
+	}
+        else if(gshare_prediction==1){
+		gshare_pht[gshare_pht_index]=2;
+		sim_num_mispred_gshare++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;	
+        }
+        else if(gshare_prediction==2){
+		gshare_pht[gshare_pht_index]=3;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
+        }
+        else if(gshare_prediction==3)
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
+	//choose
+	if (choose_prediction < 2) 
+		sim_num_mispred_openend++;
+	choose_last_correct[choose_index]=choose_last_correct[choose_index] << 8;
       }
       
 
