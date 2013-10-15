@@ -301,6 +301,24 @@ sim_uninit(void)
 #define SYSCALL(INST)	sys_syscall(&regs, mem_access, mem, INST, TRUE)
 
 /* start simulation, program loaded, processor precise state initialized */
+
+
+/* ECE552 Assignment 2 - BEGIN  CODE */
+
+//this function reverses the 12 pc bits (msb to lsb) so that we can reduce aliasing when we xor with the branch history register
+int gshare_index_calculator(int pc){
+  
+  pc = pc >>NUM_SHIFT & (0xfff);
+  int old_pc = pc;
+  pc = old_pc << 11 | old_pc <<9 | old_pc <<7| old_pc <<5 | old_pc << 3 | old_pc<< 1||((old_pc&0x040)>>1)|((old_pc&0x080)>>3)|
+ 	((old_pc&0x0100)>>5)|((old_pc&0x0200)>>7)|((old_pc&0x0400)>>9)|((old_pc&0x0800)>>11);
+  pc = pc & (0xfff);
+  return pc;
+
+}
+/* ECE552 Assignment 2 - END CODE */      
+
+
 void
 sim_main(void)
 {
@@ -313,20 +331,30 @@ sim_main(void)
 /* ECE552 Assignment 2 - BEGIN  CODE */
   //referenced by 12 bits of PC
   int i, j;
+
+  //2 bit saturating counter indexed by 12 bits of pc
   int saturating_counter[4096];
-  int bht[512];
-  int pht[64][8];
   int saturating_counter_index;
-  int bht_index;
-  int pht_col_index;
-  int pht_row_index;
   int saturating_counter_prediction;
+  //2 level bht (branch history table) ppt (private predictor table)
+  int bht[512];
+  int ppt[64][8];
+  int bht_index;
+  int ppt_col_index;
+  int ppt_row_index;
   int two_level_prediction;
+  
+  //For open-ended tournament gshare vs pag
+  //gshare history 15 bytes (xor with 12 PC bits (reversed))
   int gshare_ghr = 0;
-  int gshare_pht[32768];
-  int gshare_pht_index;
+  //bit usage 32768 * 2 bit saturating counter = 64 k
+  int gshare_pt[32768];
+  int gshare_pt_index;
   int gshare_prediction;
-  int choose_last_correct[4096];
+ 
+  //choose array, each element has 8 bits to represent which predictor won the tournament 
+  //in the last 4 trys
+  int choose_last_correct[2048];
   int choose_prediction;
   int choose_index;
   int choose_temp;
@@ -334,31 +362,38 @@ sim_main(void)
   int choose_sat_sum = 0;
   int choose_gshare_sum = 0;
 
+  //PAG: private history table indexed by 12 pc bits (history of 10 bits). 10 bits refers into global two bit counter.
   int pag_global_index;
   int pag_history_table[4096];
   int pag_two_bit_counter[1024];
   int pag_prediction; 
-  //initializing to weakly not taken
+ 
+  //set history to 0 (all not taken) 
   for(i=0;i<4096;i++)
 	pag_history_table[i]=0;
 
+  for(i=0; i<512; i++)
+	bht[i]=0;
+ // initialize all 2 bit counter to weakly not taken (1)  
+ // Strongly not taken 0, weakly not taken 1, weakly taken 2, strongly taken 3
+  
   for(i=0;i<1024;i++)
 	pag_two_bit_counter[i]=1;
 
   for(i=0;i<4096;i++) {
-	saturating_counter[i]=2;
+	saturating_counter[i]=1;
   }
-  for(i=0; i<512; i++)
-	bht[i]=0;
-
+ //initialize the ppt to weakly not taken 
   for(i=0;i<64;i++){
   	for(j=0;j<8;j++)
-		pht[i][j]=1;
+		ppt[i][j]=1;
   }
-  for(i=0;i<32768;i++) {
-	gshare_pht[i] = 2;
+ //initialize the gshare pt to weakly not taken 
+ for(i=0;i<32768;i++) {
+	gshare_pt[i] = 1;
   }
-  for(i=0;i<4096;i++) 
+  //initalize the choose to be 0 (not taken for both)
+  for(i=0;i<2048;i++) 
 	choose_last_correct[i] = 0;
 /* ECE552 Assignment 2 - END CODE */      
   
@@ -433,112 +468,129 @@ sim_main(void)
 	    is_write = TRUE;
 	}
 /* ECE552 Assignment 2 - BEGIN  CODE */
+//read the prediction from our branch predictors here and we will compare it later when we figure 
+//out when the branch is actually taken or not taken 
 //branch instruction
       if(MD_OP_FLAGS(op)&F_COND){
 	sim_num_br++;
         //saturating_counter_index = bits 14 to 3 of PC
-        saturating_counter_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
-        saturating_counter_prediction = saturating_counter[saturating_counter_index];
+        saturating_counter_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff); 
+       saturating_counter_prediction = saturating_counter[saturating_counter_index];
         //bht_index= bits 14 to 6 of PC
         bht_index =  ((regs.regs_PC>>NUM_SHIFT)&(0x0fff)) >> 3;
 
-        //pht_col_index = bits 5 to 3 of PC
-        pht_col_index =  (regs.regs_PC>>NUM_SHIFT) & 0x07; 
-        pht_row_index = bht[bht_index];	
-        two_level_prediction = pht[pht_row_index][pht_col_index];
+        //ppt_col_index = bits 5 to 3 of PC
+        ppt_col_index =  (regs.regs_PC>>NUM_SHIFT) & 0x07; 
+        ppt_row_index = bht[bht_index];	
+        two_level_prediction = ppt[ppt_row_index][ppt_col_index];
 	
-	//gshare
-	gshare_pht_index = ((regs.regs_PC>>NUM_SHIFT)&(0x07fff))^(gshare_ghr&0x07fff);
-        gshare_prediction = gshare_pht[gshare_pht_index]; 
-	choose_index = (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
+	//gshare index into history table with 15 bits of ghr xor with 12 bits of PC (reversed)(bits 3 to 14), reversing reduces aliasing
+	gshare_pt_index = (gshare_index_calculator(regs.regs_PC))^(gshare_ghr&0x07fff);
+        gshare_prediction = gshare_pt[gshare_pt_index]; 
+	choose_index = (regs.regs_PC>>NUM_SHIFT)&(0x07ff);
 	choose_temp = choose_last_correct[choose_index];
-        
+       
+        //pag use 12 bits of PC (bits 14 to 3)
 	pag_global_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
 	pag_prediction = pag_two_bit_counter[pag_history_table[pag_global_index]];
-	
+
+ 	//Goes through the last 4 tournament comparisons, if no clear winner then default to gshare
+	//on each iteration
+	// if 00 (both wrong, check next iteration until we find a winner or till reach 4 histories, no winner then resort to gshare)
+	// if 01 (pag right, gshare wrong) go with pag
+	// if 10 (gshare right, pag wrong) go with gshare
+	// if 11 no clear winner (both right, same logic as 00)	
 	for (i=0;i<4;i++) {
-		choose_temp_masked = choose_temp & 0x0ff;
-		choose_prediction = gshare_prediction;
-//                printf("choose_temp %x choosel_last_correct %x choose index %x\n", choose_temp_masked, choose_last_correct[choose_index], choose_index);			
-		if (choose_temp_masked == 0x01 ){
-			choose_prediction = saturating_counter_prediction;
-			break;
-	        }	
-		else if (choose_temp_masked == 0x10 ){
-			choose_prediction = gshare_prediction;
-			break;
-		}
-		choose_temp = choose_temp >> 8;	
+      		choose_temp_masked = choose_temp & 0x0ff;
+      		choose_prediction = gshare_prediction;
+      		if (choose_temp_masked == 0x01 ){
+      			choose_prediction = pag_prediction;
+				break;
+        	}	
+      		else if (choose_temp_masked == 0x10 ){
+      			choose_prediction = gshare_prediction;
+				break;
+      		}
+      		choose_temp = choose_temp >> 8;	
 	}
 
 	choose_last_correct[choose_index]=choose_last_correct[choose_index] << 8;
-//	choose_sat_sum=0;
-//	choose_gshare_sum=0;
-//	for(i=0;i<4;i++){
-//		choose_temp_masked = choose_temp &0x0ff;
-//		choose_sat_sum += (choose_temp_masked & 0x0f);	
-//		choose_gshare_sum += ((choose_temp_masked >> 4)&0x0f);
-//		choose_temp = choose_temp>>8;
-//	}
-//	if(choose_gshare_sum>=choose_sat_sum)
-//		choose_prediction=gshare_prediction;
-//	else
-//		choose_prediction=saturating_counter_prediction;
 
 	
         pag_global_index= (regs.regs_PC>>NUM_SHIFT)&(0x0fff);
 	pag_prediction = pag_two_bit_counter[pag_history_table[pag_global_index]];
 	
       }        	
+
 //branch is not taken
       if ((regs.regs_PC + sizeof(md_inst_t))== regs.regs_NPC && (MD_OP_FLAGS(op)&F_COND)){
-        //2 BIT SATURATING
+	//if branch is not taken then static is wrong
 	sim_num_mispred_static++;
-        if(saturating_counter_prediction==0)
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
+        
+	//2 BIT SATURATING
+	//state machine for two bit counter
+	// 0 strongly not taken, this value  will stay in strongly not taken
+	// 1 weakly not taken, this value will turn into strongly not taken (0)
+        // 2 weakly taken, this value will turn into weakly not taken (1) 
+	// 3 strongly taken, this value will turn into weakly not taken (2)
+        if(saturating_counter_prediction==0);
         else if(saturating_counter_prediction==1){
 		saturating_counter[saturating_counter_index]=0;
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
         }
         else if(saturating_counter_prediction==2){
 		saturating_counter[saturating_counter_index]=1;
 		sim_num_mispred_2bitsat++;
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
         }
         else if(saturating_counter_prediction==3){
 		saturating_counter[saturating_counter_index]=2;
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 		sim_num_mispred_2bitsat++;
         }
         //2 LEVEL
+	//update the history being stored for the two level branch history table by shifting to the left
+	//(shifts in a 0 which represents not taken) 
+													
         bht[bht_index] = (bht[bht_index]<<1)& 0x03f;
+
+	//each index of the private predictor table in the two level predictor is a 2 bit counter
+	//refer to the 2 bit saturating description above for details
+	//the indices into the ppt is calculated above (when we figure out it's a branch instruction)
 	if(two_level_prediction==0);
         else if(two_level_prediction==1){
-		pht[pht_row_index][pht_col_index]=0;
+		ppt[ppt_row_index][ppt_col_index]=0;
         }
         else if(two_level_prediction==2){
-		pht[pht_row_index][pht_col_index]=1;
+		ppt[ppt_row_index][ppt_col_index]=1;
 		sim_num_mispred_2level++;
         }
         else if(two_level_prediction==3){
-		pht[pht_row_index][pht_col_index]=2;
+		ppt[ppt_row_index][ppt_col_index]=2;
 		sim_num_mispred_2level++;
         }
-        //gshare        
+       
+	//OPEN-ENDED
+	 //gshare   
+	//Global history register, shift in a not taken same way as history in two-level     
         gshare_ghr = (gshare_ghr<<1)& 0x07fff;
+
+	//each index into gshare_pt is a 2 bit saturating counter, refer to description above
+	//we also want to update if the gshare predict was correct (used by our tournament to decide between gshare and pag)
+        //choose_last_correct stores whether
+	// gshare and pag were correct in this cycle
+	// when we or with 0x10 we are setting upper bit to 1 (gshare portion)
+        // when we and with 0x01 we are setting upper bit to 0 (gshare portion, while preserving the pag portion)
 	if(gshare_prediction==0)	
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
         else if(gshare_prediction==1){
-		gshare_pht[gshare_pht_index]=0;
+		gshare_pt[gshare_pt_index]=0;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
         }
         else if(gshare_prediction==2){
-		gshare_pht[gshare_pht_index]=1;
+		gshare_pt[gshare_pt_index]=1;
 		sim_num_mispred_gshare++;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;
         }
         else if(gshare_prediction==3){
-		gshare_pht[gshare_pht_index]=2;
+		gshare_pt[gshare_pt_index]=2;
 		sim_num_mispred_gshare++;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;
         }
@@ -546,22 +598,30 @@ sim_main(void)
 
         
 	//choose
+	//if the openended predictor predicted a 2 or a 3 (a weakly taken or strongly taken) we have a mispredict
 	if (choose_prediction > 1) 
 		sim_num_mispred_openend++;
 
 
-	
-	if(pag_prediction==0);			
+	//each index into pag_two_bit_counter is a 2 bit saturating counter, refer to description above
+	// also updating choose_last_correct refer to description above gshare
+	// when we or with 0x01 we are setting lower bit to 1 (pag portion)
+        // when we and with 0x10 we are setting lower bit to 0 (pag portion, while preserving the gshare portion)
+	if(pag_prediction==0)			
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
 	else if(pag_prediction==1){
 		pag_two_bit_counter[pag_history_table[pag_global_index]] = 0;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
 	}
 	else if(pag_prediction==2){
 		pag_two_bit_counter[pag_history_table[pag_global_index]] = 1;
 		sim_num_mispred_pag++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 	}
 	else if(pag_prediction==3){
 		pag_two_bit_counter[pag_history_table[pag_global_index]] = 2;
 		sim_num_mispred_pag++;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 	}
 	pag_history_table[pag_global_index] = (pag_history_table[pag_global_index] << 1)&(0x03ff);        
 	
@@ -574,72 +634,93 @@ sim_main(void)
 //branch taken
       else if(MD_OP_FLAGS(op)&F_COND){
         //2-bit SATURATING
+	//2 BIT SATURATING
+	//state machine for two bit counter
+	// 0 strongly not taken, this value  will stay in strongly not taken
+	// 1 weakly not taken, this value will turn into strongly not taken (0)
+        // 2 weakly taken, this value will turn into weakly not taken (1) 
+	
 	if(saturating_counter_prediction==0){
 	        saturating_counter[saturating_counter_index]=1;
 		sim_num_mispred_2bitsat++;
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 	}        
         else if(saturating_counter_prediction==1){
 		saturating_counter[saturating_counter_index]=2;
 		sim_num_mispred_2bitsat++;
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
         }
         else if(saturating_counter_prediction==2){
 		saturating_counter[saturating_counter_index]=3;
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
         }
-        else if(saturating_counter_prediction==3)
-		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
+        else if(saturating_counter_prediction==3);
 
-        //2 LEVEL PREDICTOR
+        //2 LEVEL
+	//update the history being stored for the two level branch history table by shifting to the left and or with 1 (introduces lsb of 1)
+	//(shifts in a 1 which represents not taken) 
         bht[bht_index] = ((bht[bht_index]<<1)& 0x03f)|0x01;
 	if(two_level_prediction==0){
-		pht[pht_row_index][pht_col_index]=1;
+		ppt[ppt_row_index][ppt_col_index]=1;
 		sim_num_mispred_2level++;
         }
         else if(two_level_prediction==1){
-		pht[pht_row_index][pht_col_index]=2;
+		ppt[ppt_row_index][ppt_col_index]=2;
 		sim_num_mispred_2level++;
         }
         else if(two_level_prediction==2){
-		pht[pht_row_index][pht_col_index]=3;
+		ppt[ppt_row_index][ppt_col_index]=3;
         }
         else if(two_level_prediction==3);
 	
-	//OPEN ENDED
+	//OPEN-ENDED
+	 //gshare   
+	//Global history register, shift in a not taken same way as history in two-level     
         gshare_ghr = ((gshare_ghr<<1)& 0x07fff) | 0x01;
+	//each index into gshare_pt is a 2 bit saturating counter, refer to description above
+	//we also want to update if the gshare predict was correct (used by our tournament to decide between gshare and pag)
+        //choose_last_correct stores whether
+	// gshare and pag were correct in this cycle
+        // when we and with 0x01 we are setting upper bit to 0 (gshare portion, while preserving the pag portion)
+	// when we or with 0x10 we are setting upper bit to 1 (gshare portion)
 	if(gshare_prediction==0){
-		gshare_pht[gshare_pht_index]=1;
+		gshare_pt[gshare_pt_index]=1;
 		sim_num_mispred_gshare++;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;	
 	}
         else if(gshare_prediction==1){
-		gshare_pht[gshare_pht_index]=2;
+		gshare_pt[gshare_pt_index]=2;
 		sim_num_mispred_gshare++;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x01;	
         }
         else if(gshare_prediction==2){
-		gshare_pht[gshare_pht_index]=3;
+		gshare_pt[gshare_pt_index]=3;
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
         }
         else if(gshare_prediction==3)
 		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x10;
 	//choose
+	//if the openended predictor predicted a 0 or a 1 (a weakly  not taken or strongly not  taken) we have a mispredict
 	if (choose_prediction < 2) 
 		sim_num_mispred_openend++;
 	
+	//each index into pag_two_bit_counter is a 2 bit saturating counter, refer to description above
+	// also updating choose_last_correct refer to description above gshare
+        // when we and with 0x10 we are setting lower bit to 0 (pag portion, while preserving the gshare portion)
+	// when we or with 0x01 we are setting lower bit to 1 (pag portion)
 	if(pag_prediction==0){
 		sim_num_mispred_pag++;
 		pag_two_bit_counter[pag_history_table[pag_global_index]] = 1;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 	}			
 	else if(pag_prediction==1){
 		sim_num_mispred_pag++;
 		pag_two_bit_counter[pag_history_table[pag_global_index]] = 2;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] & 0x10;
 	}
 	else if(pag_prediction==2){
 		pag_two_bit_counter[pag_history_table[pag_global_index]] = 3;
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
 	}
-	else if(pag_prediction==3);
+	else if(pag_prediction==3)
+		choose_last_correct[choose_index] = choose_last_correct[choose_index] | 0x01;
 	pag_history_table[pag_global_index] = ((pag_history_table[pag_global_index] << 1)&(0x03ff))|(0x01);        
 	
       }
