@@ -11,8 +11,8 @@
 //prints a single instruction
 static void print_tom_instr(instruction_t* instr) {
 
-  md_print_insn(instr->inst, instr->pc, stdout);
-  myfprintf(stdout, "\t%d\t%d\t%d\t%d\n", 
+  md_print_insn(instr->inst, instr->pc, stderr);
+  myfprintf(stderr, "\t\t%d\t%d\t%d\t%d\n", 
 	    instr->tom_dispatch_cycle,
 	    instr->tom_issue_cycle,
 	    instr->tom_execute_cycle,
@@ -23,7 +23,7 @@ static void print_tom_instr(instruction_t* instr) {
 //prints all the instructions inside the given trace for pipeline
 void print_all_instr(instruction_trace_t* trace, int sim_num_insn) {
 
-  fprintf(stdout, "TOMASULO TABLE\n");
+  fprintf(stderr, "TOMASULO TABLE\n");
 
   int printed_count = 0;
   int index = 1;
