@@ -276,8 +276,8 @@ static bool is_simulation_done() {
   }
   if (instr_queue_size != 0)
 	return false;
-  if (commonDataBus != NULL)
-	return false;
+//  if (commonDataBus != NULL)
+//	return false;
   
   return true;
 
@@ -364,7 +364,7 @@ void execute_To_CDB(int current_cycle) {
 	if(fuINT[j] != NULL && ((fuINT[j]->tom_execute_cycle + FU_INT_LATENCY) <= current_cycle)) {
 		if (!WRITES_CDB(fuINT[j]->op)) {
 			//if it is a store instruction, free everything
-			fuINT[j]-> tom_cdb_cycle = current_cycle;
+			//fuINT[j]-> tom_cdb_cycle = current_cycle;
       			index = get_int_RS_index(fuINT[j]);
         		assert(index!=-1);                   
       			reservINT[index] = NULL;
@@ -642,6 +642,6 @@ counter_t runTomasulo(instruction_trace_t* trace)
      if (is_simulation_done())
         break;
   }
-  print_all_instr(trace, sim_num_insn);
+//  print_all_instr(trace, sim_num_insn);
   return cycle;
 }
