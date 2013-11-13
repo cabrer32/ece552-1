@@ -52,6 +52,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include "host.h"
 #include "misc.h"
@@ -505,9 +506,55 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
 
 }
 
+bool prefetch_addr_in_cache (struct cache_t *cp, md_addr_t addr) {
+  bool ret = false;  
+  md_addr_t tag = CACHE_TAG(cp, addr);
+  md_addr_t set = CACHE_SET(cp, addr);
+  struct cache_blk_t *blk;
+  /* check for a fast hit: access to same block */
+  if (CACHE_TAGSET(cp, addr) == cp->last_tagset) {
+    /* hit in the same block */
+        ret = true;
+  }
+    
+  else if (cp->hsize) {
+      /* higly-associativity cache, access through the per-set hash tables */
+      int hindex = CACHE_HASH(cp, tag);
+
+    for (blk=cp->sets[set].hash[hindex];blk;blk=blk->hash_next) {
+	    if (blk->tag == tag && (blk->status & CACHE_BLK_VALID)) {
+	        ret = true;
+            break;
+        }
+    }
+  }
+  else {
+      /* low-associativity cache, linear search the way list */
+    for (blk=cp->sets[set].way_head;blk;blk=blk->way_next) {
+	    if (blk->tag == tag && (blk->status & CACHE_BLK_VALID)) {
+	        ret = true;
+            break;
+        }
+    }
+  }
+  return ret;
+}
+
 /* Next Line Prefetcher */
 void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	; 
+  md_addr_t nextline;
+  nextline = (addr + cp->bsize) - (addr % cp->bsize);
+
+  if (!(prefetch_addr_in_cache(cp, nextline)))
+     cache_access(cp,	/* cache to access */
+ 	     Read,		/* access type, Read or Write */
+ 	     nextline,		/* address of access */
+ 	     NULL,			/* ptr to buffer for input/output */
+	     cp->bsize,		/* number of bytes to access */
+	     0,		/* time of access */
+	     NULL,		/* for return of user data ptr */
+	     NULL,	/* for address of replaced block */
+	     1);		/* 1 if the access is a prefetch, 0 if it is not */
 }
 
 /* Open Ended Prefetcher */
