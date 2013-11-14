@@ -97,6 +97,10 @@
 /* highly associative caches are implemented using a hash table lookup to
    speed block access, this macro decides if a cache is "highly associative" */
 #define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
+/* ECE552 Assignment 5 - BEGIN CODE*/
+#define RPT_ENTRIES 32768
+//#define RPT_ENTRIES 1024
+/* ECE552 Assignment 5 - END CODE*/
 
 /* cache replacement policy */
 enum cache_policy {
@@ -159,6 +163,13 @@ struct cache_t
   enum cache_policy policy;	/* cache replacement policy */
   unsigned int hit_latency;	/* cache hit latency */
   int prefetch_type;		/* prefetcher type */
+/* ECE552 Assignment 5 - BEGIN CODE*/
+  md_addr_t RPT_tag_array [RPT_ENTRIES];
+  md_addr_t RPT_prev_addr [RPT_ENTRIES];
+  int RPT_stride [RPT_ENTRIES];
+  int RPT_state [RPT_ENTRIES];
+/* ECE552 Assignment 5 - END CODE*/
+
 
   /* miss/replacement handler, read/write BSIZE bytes starting at BADDR
      from/into cache block BLK, returns the latency of the operation

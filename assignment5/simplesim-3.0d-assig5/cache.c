@@ -59,6 +59,13 @@
 #include "machine.h"
 #include "cache.h"
 
+#define NUM_SHIFT_PC 3
+#define NUM_SHIFT_TAG 18 
+#define PC_MASK 0x07fff 
+//#define NUM_SHIFT_TAG 13 
+//#define PC_MASK 0x03ff 
+ 
+
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
 #define CACHE_SET(cp, addr)	(((addr) >> (cp)->set_shift) & (cp)->set_mask)
@@ -139,6 +146,8 @@
 
 /* bound sqword_t/dfloat_t to positive int */
 #define BOUND_POS(N)		((int)(MIN(MAX(0, (N)), 2147483647)))
+
+md_addr_t get_PC();
 
 /* unlink BLK from the hash table bucket chain in SET */
 static void
@@ -409,6 +418,14 @@ cache_create(char *name,		/* name of the cache */
 	    cp->sets[i].way_tail = blk;
 	}
     }
+/* ECE552 Assignment 5 - BEGIN CODE*/
+  for (i=0; i<RPT_ENTRIES;i++) {
+      cp->RPT_tag_array [i] = 0;
+      cp->RPT_prev_addr [i] = 0;
+      cp->RPT_stride [i] = 0;
+      cp->RPT_state [i] = 0;
+  }     
+/* ECE552 Assignment 5 - END CODE*/
   return cp;
 }
 
@@ -564,7 +581,62 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
 
 /* Stride Prefetcher */
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	; 
+    int stride;
+    md_addr_t prefetch_addr;
+    int RPT_index = (get_PC() >> NUM_SHIFT_PC) & PC_MASK;
+    printf("RPT_index = %d\n",RPT_index);
+    md_addr_t tag = (get_PC() >> NUM_SHIFT_TAG);
+    if (tag == cp->RPT_tag_array[RPT_index]) {
+        //tag is in cache, check stride
+        stride = addr - cp->RPT_prev_addr[RPT_index];
+        //new stride same as old stride
+        if (stride == cp->RPT_stride[RPT_index]) {
+            if (cp->RPT_state[RPT_index] == 0)
+                cp->RPT_state[RPT_index] = 1;
+            if (cp->RPT_state[RPT_index] == 1)
+                cp->RPT_state[RPT_index] = 3;
+            if (cp->RPT_state[RPT_index] == 2)
+                cp->RPT_state[RPT_index] = 3;
+            if (cp->RPT_state[RPT_index] == 3)
+                cp->RPT_state[RPT_index] = 3;
+        }
+        else {
+            if (cp->RPT_state[RPT_index] == 0)
+                cp->RPT_state[RPT_index] = 0;
+            if (cp->RPT_state[RPT_index] == 1)
+                cp->RPT_state[RPT_index] = 0;
+            if (cp->RPT_state[RPT_index] == 2)
+                cp->RPT_state[RPT_index] = 1;
+            if (cp->RPT_state[RPT_index] == 3)
+                cp->RPT_state[RPT_index] = 2; 
+        }
+        cp->RPT_prev_addr[RPT_index] = addr;            
+        cp->RPT_stride[RPT_index] = stride;
+        if (cp->RPT_state[RPT_index] == 0);
+        else {
+            //generate prefetch 
+            prefetch_addr = addr + stride;
+            //align addr to block
+            prefetch_addr = prefetch_addr - (prefetch_addr % cp->bsize);
+            if (!(prefetch_addr_in_cache(cp, prefetch_addr)))
+                cache_access(cp,	/* cache to access */
+ 	            Read,		/* access type, Read or Write */
+ 	            prefetch_addr,		/* address of access */
+ 	            NULL,			/* ptr to buffer for input/output */
+	            cp->bsize,		/* number of bytes to access */
+	            0,		/* time of access */
+	            NULL,		/* for return of user data ptr */
+	            NULL,	/* for address of replaced block */
+	            1);		/* 1 if the access is a prefetch, 0 if it is not */
+       } 
+    }     
+	else {
+        //tag not in cache, update RPT
+        cp->RPT_tag_array[RPT_index] = tag;
+        cp->RPT_prev_addr[RPT_index] = addr;
+        cp->RPT_stride[RPT_index] = 0;
+        cp->RPT_state[RPT_index] = 2;
+    }     
 }
 
 
@@ -590,8 +662,6 @@ void generate_prefetch(struct cache_t *cp, md_addr_t addr) {
 	}
 
 }
-
-md_addr_t get_PC();
 
 /* print cache stats */
 void
