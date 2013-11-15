@@ -98,8 +98,8 @@
    speed block access, this macro decides if a cache is "highly associative" */
 #define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
 /* ECE552 Assignment 5 - BEGIN CODE*/
-#define RPT_ENTRIES 32768
-//#define RPT_ENTRIES 1024
+//#define RPT_ENTRIES 32768
+#define RPT_ENTRIES 1024
 /* ECE552 Assignment 5 - END CODE*/
 
 /* cache replacement policy */

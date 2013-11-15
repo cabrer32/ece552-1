@@ -60,11 +60,18 @@
 #include "cache.h"
 
 #define NUM_SHIFT_PC 3
-#define NUM_SHIFT_TAG 18 
-#define PC_MASK 0x07fff 
-//#define NUM_SHIFT_TAG 13 
-//#define PC_MASK 0x03ff 
+//RPT 32768
+//#define NUM_SHIFT_TAG 18 
+//#define PC_MASK 0x07fff 
+
+//RPT 1024
+#define NUM_SHIFT_TAG 13 
+#define PC_MASK 0x03ff 
  
+
+//RPT 1024
+//#define NUM_SHIFT_TAG 9 
+//#define PC_MASK 0x03f 
 
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
@@ -560,7 +567,7 @@ bool prefetch_addr_in_cache (struct cache_t *cp, md_addr_t addr) {
 /* Next Line Prefetcher */
 void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
   md_addr_t nextline;
-  nextline = (addr + cp->bsize) - (addr % cp->bsize);
+  nextline = (addr + cp->bsize) - ((addr+cp->bsize) % cp->bsize);
 
   if (!(prefetch_addr_in_cache(cp, nextline)))
      cache_access(cp,	/* cache to access */
@@ -584,7 +591,7 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
     int stride;
     md_addr_t prefetch_addr;
     int RPT_index = (get_PC() >> NUM_SHIFT_PC) & PC_MASK;
-    printf("RPT_index = %d\n",RPT_index);
+    //printf("RPT_index = %d\n",RPT_index);
     md_addr_t tag = (get_PC() >> NUM_SHIFT_TAG);
     if (tag == cp->RPT_tag_array[RPT_index]) {
         //tag is in cache, check stride
