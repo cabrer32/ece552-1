@@ -99,7 +99,89 @@
 #define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
 /* ECE552 Assignment 5 - BEGIN CODE*/
 //#define RPT_ENTRIES 32768
-#define RPT_ENTRIES 1024
+//RPT 32768
+//#define NUM_SHIFT_TAG 18 
+//#define PC_MASK 0x07fff 
+
+#define NO_PRED 0
+#define TRANSIENT 1
+#define INIT 2
+#define STEADY 3
+
+//RPT 1048576
+#define NUM_SHIFT_TAG 23 
+#define PC_MASK 0x0fffff 
+
+//RPT 2048
+//#define NUM_SHIFT_TAG 14 
+//#define PC_MASK 0x07ff 
+
+//RPT 1024
+//#define NUM_SHIFT_TAG 13 
+//#define PC_MASK 0x03ff 
+ 
+
+//RPT 512
+//#define NUM_SHIFT_TAG 12 
+//#define PC_MASK 0x01ff 
+
+
+//RPT 256
+//#define NUM_SHIFT_TAG 11 
+//#define PC_MASK 0x0ff 
+
+
+//RPT 128
+//#define NUM_SHIFT_TAG 10 
+//#define PC_MASK 0x07f 
+
+
+//RPT 64
+//#define NUM_SHIFT_TAG 9 
+//#define PC_MASK 0x03f 
+
+
+//RPT 32
+//#define NUM_SHIFT_TAG 8 
+//#define PC_MASK 0x01f
+
+ 
+//RPT 16
+//#define NUM_SHIFT_TAG 7 
+//#define PC_MASK 0x0f
+
+//RPT 8
+//#define NUM_SHIFT_TAG 6 
+//#define PC_MASK 0x07
+
+/* cache access macros */
+#define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
+#define CACHE_SET(cp, addr)	(((addr) >> (cp)->set_shift) & (cp)->set_mask)
+#define CACHE_BLK(cp, addr)	((addr) & (cp)->blk_mask)
+#define CACHE_TAGSET(cp, addr)	((addr) & (cp)->tagset_mask)
+
+/* extract/reconstruct a block address */
+#define CACHE_BADDR(cp, addr)	((addr) & ~(cp)->blk_mask)
+#define CACHE_MK_BADDR(cp, tag, set)					\
+
+//#define RPT_ENTRIES 1048576
+//#define RPT_ENTRIES 2048
+//#define RPT_ENTRIES 1024
+//#define RPT_ENTRIES 512
+//#define RPT_ENTRIES 256
+//#define RPT_ENTRIES 128
+//#define RPT_ENTRIES 64
+//#define RPT_ENTRIES 32
+//#define RPT_ENTRIES 16
+//#define RPT_ENTRIES 8
+
+#define INDEX_TABLE_ROWS 1024
+#define INDEX_TABLE_TAG_SHIFT 10   
+#define INDEX_TABLE_MASK 0x03ff
+#define GLOBAL_TABLE_ROWS 65536
+#define TIMEOUT_WIDTH 8
+#define TIMEOUT_DEPTH 4
+
 /* ECE552 Assignment 5 - END CODE*/
 
 /* cache replacement policy */
@@ -113,6 +195,23 @@ enum cache_policy {
 /* block status values */
 #define CACHE_BLK_VALID		0x00000001	/* block in valid, in use */
 #define CACHE_BLK_DIRTY		0x00000002	/* dirty block */
+
+#define DELTA_ARRAY_SIZE 16
+#define DCPT_ROWS 256
+
+
+typedef struct{
+    md_addr_t PC;
+    md_addr_t last_addr;
+    md_addr_t last_prefetch;
+    unsigned int delta[DELTA_ARRAY_SIZE];
+    
+    int last_delta_index;
+    counter_t last_access_time; 
+}DCPT_row;
+
+
+
 
 /* cache block (or line) definition */
 struct cache_blk_t
@@ -150,6 +249,24 @@ struct cache_set_t
 				   access to cache blocks */
 };
 
+
+typedef struct {
+    md_addr_t tag;
+    int index;
+    md_addr_t addr;
+
+}table_row;
+
+typedef struct{
+    md_addr_t tag_array;
+    md_addr_t prev_addr;
+    int stride;
+    int state;
+}RPT_row;
+
+
+
+
 /* cache definition */
 struct cache_t
 {
@@ -164,10 +281,24 @@ struct cache_t
   unsigned int hit_latency;	/* cache hit latency */
   int prefetch_type;		/* prefetcher type */
 /* ECE552 Assignment 5 - BEGIN CODE*/
-  md_addr_t RPT_tag_array [RPT_ENTRIES];
-  md_addr_t RPT_prev_addr [RPT_ENTRIES];
-  int RPT_stride [RPT_ENTRIES];
-  int RPT_state [RPT_ENTRIES];
+  //md_addr_t * RPT_tag_array;
+  //md_addr_t *RPT_prev_addr;
+  //int *RPT_stride;
+  //int *RPT_state;
+  RPT_row * rpt; 
+  int rpt_entries;
+  
+  //open-ended-garbage
+  DCPT_row DCPT [DCPT_ROWS];
+ 
+ 
+  //open-ended markov
+  table_row index_table[INDEX_TABLE_ROWS];
+  table_row ghb[GLOBAL_TABLE_ROWS];
+  int head_ptr;
+  
+  md_addr_t last_addr; 
+  
 /* ECE552 Assignment 5 - END CODE*/
 
 
