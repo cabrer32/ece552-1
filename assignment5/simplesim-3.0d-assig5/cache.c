@@ -53,6 +53,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <math.h>
 
 #include "host.h"
 #include "misc.h"
@@ -457,14 +458,15 @@ cache_create(char *name,		/* name of the cache */
 
   cp->head_ptr = 0;
   for(i=0; i<INDEX_TABLE_ROWS; i++){
-    cp->index_table[i].tag = 0;
+    //cp->index_table[i].tag = 0;
     cp->index_table[i].index = -1;
-
+    cp->index_table[i].addr = 0;
    }
 
   for(i=0; i<GLOBAL_TABLE_ROWS; i++){
-    cp->ghb[i].tag = 0;
+    //cp->ghb[i].tag = 0;
     cp->ghb[i].index = -1;
+    cp->ghb[i].addr = 0;
 
    }
 
@@ -842,106 +844,112 @@ void open_ended_prefetcher_garbage(struct cache_t *cp, md_addr_t addr) {
 //
 // }   
 
-void open_ended_prefetcher_markov(struct cache_t *cp, md_addr_t addr) {
+void open_ended_prefetcher_markov(struct cache_t *cp, md_addr_t addr, int prefetch) {
    
    int it_index = (addr) & INDEX_TABLE_MASK;
-   md_addr_t tag = (addr >> INDEX_TABLE_TAG_SHIFT);
+   //md_addr_t tag = addr ;
    //md_addr_t tag = (addr >> INDEX_TABLE_TAG_SHIFT);
    int ghb_index; 
    int i;
    md_addr_t prefetch_addr;
    int count = 0;
-   if(cp->index_table[it_index].tag == tag){
+   if(cp->index_table[it_index].addr == addr){
         ghb_index = cp->index_table[it_index].index;
 
-        while(cp->ghb[ghb_index].tag == tag && cp->ghb[ghb_index].index != -1 && count <= TIMEOUT_WIDTH){
-            prefetch_addr = cp->ghb[(ghb_index+1)%GLOBAL_TABLE_ROWS].addr;
-            prefetch_addr -= prefetch_addr % cp->bsize;
-            if (!(prefetch_addr_in_cache(cp, prefetch_addr))){
-                cache_access(cp,	/* cache to access */
- 	            Read,		/* access type, Read or Write */
- 	            prefetch_addr,		/* address of access */
- 	            NULL,			/* ptr to buffer for input/output */
-	            cp->bsize,		/* number of bytes to access */
-	            0,		/* time of access */
-	            NULL,		/* for return of user data ptr */
-	            NULL,	/* for address of replaced block */
-	            1);		/* 1 if the access is a prefetch, 0 if it is not */
+        while(cp->ghb[ghb_index].addr == addr && cp->ghb[ghb_index].index != -1 && count < TIMEOUT_WIDTH){
+            for(i=0; i<TIMEOUT_DEPTH;i++){
+                prefetch_addr = cp->ghb[(ghb_index + i +1)%GLOBAL_TABLE_ROWS].addr;
+                prefetch_addr -= prefetch_addr % cp->bsize;
+                if (!(prefetch_addr_in_cache(cp, prefetch_addr)) && prefetch &&prefetch_addr != 0)//{
+                    cache_access(cp,	/* cache to access */
+ 	                Read,		/* access type, Read or Write */
+ 	                prefetch_addr,		/* address of access */
+ 	                NULL,			/* ptr to buffer for input/output */
+	                cp->bsize,		/* number of bytes to access */
+	                0,		/* time of access */
+	                NULL,		/* for return of user data ptr */
+	                NULL,	/* for address of replaced block */
+	                1);		/* 1 if the access is a prefetch, 0 if it is not */
+                //}
             }
             ghb_index = cp->ghb[ghb_index].index;
             count++;
-
-         }
-         cp->ghb[cp->head_ptr].tag = tag;
-         cp->ghb[cp->head_ptr].index = cp->index_table[it_index].index;
+        }
          cp->ghb[cp->head_ptr].addr = addr;
+         cp->ghb[cp->head_ptr].index = cp->index_table[it_index].index;
+         //cp->ghb[cp->head_ptr].addr = addr;
+         cp->index_table[it_index].index = cp->head_ptr;
          cp->head_ptr = (cp->head_ptr + 1) % GLOBAL_TABLE_ROWS;
         
    }
    else{
-        cp->index_table[it_index].tag = tag;
+        cp->index_table[it_index].addr = addr;
         cp->index_table[it_index].index = cp->head_ptr;
-        cp->ghb[cp->head_ptr].tag = tag;
         cp->ghb[cp->head_ptr].addr = addr;
+        //cp->ghb[cp->head_ptr].addr = addr;
         cp->head_ptr = (cp->head_ptr + 1) % GLOBAL_TABLE_ROWS;
-        cp->ghb[cp->head_ptr].index = -1;
+        //cp->ghb[cp->head_ptr].index = -1;
    }
 
 //    stride_prefetcher(cp, addr);
 
 
-}
+ }
 
-void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
-   md_addr_t delta = (md_addr_t)(addr - cp->last_addr); 
-   int it_index = (delta) & INDEX_TABLE_MASK;
-   md_addr_t tag = delta;
-   //md_addr_t tag = (addr >> INDEX_TABLE_TAG_SHIFT);
-   int ghb_index; 
-   int i;
-   md_addr_t prefetch_addr, aligned_addr;
-   int count = 0;
-   
-   if(cp->index_table[it_index].tag == tag){
-        ghb_index = cp->index_table[it_index].index;
-        prefetch_addr = addr;
-        cp->ghb[cp->head_ptr].tag = addr;
-        cp->ghb[cp->head_ptr].index = cp->index_table[it_index].index;
-        while(ghb_index != cp->head_ptr && count <= TIMEOUT_DEPTH){ // && delta == (ghb[ghb_index].tag - ghb[ghb_prev].tag)){
-            prefetch_addr = prefetch_addr + (cp->ghb[(ghb_index+1)%GLOBAL_TABLE_ROWS].tag - cp->ghb[ghb_index].tag);
-            aligned_addr = prefetch_addr - (prefetch_addr % cp->bsize);
-            //prefetch_addr -= prefetch_addr % cp->bsize;
-            if (!(prefetch_addr_in_cache(cp, prefetch_addr))){
-                cache_access(cp,	/* cache to access */
- 	            Read,		/* access type, Read or Write */
- 	            aligned_addr,		/* address of access */
- 	            NULL,			/* ptr to buffer for input/output */
-	            cp->bsize,		/* number of bytes to access */
-	            0,		/* time of access */
-	            NULL,		/* for return of user data ptr */
-	            NULL,	/* for address of replaced block */
-	            1);		/* 1 if the access is a prefetch, 0 if it is not */
-            }
-            ghb_index = (ghb_index+1) % GLOBAL_TABLE_ROWS;
-            count++;
-         }
-         //cp->ghb[cp->head_ptr].tag = tag;
-         //cp->ghb[cp->head_ptr].index = cp->index_table[it_index].index;
-         //cp->ghb[cp->head_ptr].addr = addr;
-         cp->head_ptr = (cp->head_ptr + 1) % GLOBAL_TABLE_ROWS;
-        
-   }
-   else{
-        cp->index_table[it_index].tag = tag;
-        cp->index_table[it_index].index = cp->head_ptr;
-        cp->ghb[cp->head_ptr].tag = addr;
-        cp->head_ptr = (cp->head_ptr + 1) % GLOBAL_TABLE_ROWS;
-        cp->ghb[cp->head_ptr].index = -1;
-   }
-
-   //stride_prefetcher(cp, addr);
-
-}
+//void open_ended_prefetcher_delta(struct cache_t *cp, md_addr_t addr) {
+//   int delta = (int)addr - (int)cp->last_addr; 
+////   fprintf (stderr,"addr = %x, prev_addr = %x, delta = %d\n", addr, cp->last_addr, delta);
+//   int it_index = (delta) & INDEX_TABLE_MASK;
+//   //md_addr_t tag = (addr >> INDEX_TABLE_TAG_SHIFT);
+//   int ghb_index, generated_delta; 
+//   //int i;
+//   md_addr_t prefetch_addr, aligned_addr;
+//   int count = 0;
+//   
+//   if(cp->index_table[it_index].tag == delta){
+//        ghb_index = cp->index_table[it_index].index;
+//        prefetch_addr = addr;
+//        cp->ghb[cp->head_ptr].addr = addr;
+//        cp->ghb[cp->head_ptr].index = ghb_index;
+//        while(ghb_index != cp->head_ptr && count < TIMEOUT_DEPTH){ // && delta == (ghb[ghb_index].tag - ghb[ghb_prev].tag)){
+//            generated_delta = (int)cp->ghb[(ghb_index+1)%GLOBAL_TABLE_ROWS].addr - (int)cp->ghb[ghb_index].addr;
+//            prefetch_addr += generated_delta;
+//            ghb_index = (ghb_index+1) % GLOBAL_TABLE_ROWS;
+//            count++;
+//        
+//       }
+//
+//       aligned_addr = prefetch_addr - (prefetch_addr % cp->bsize);
+//       if (!(prefetch_addr_in_cache(cp, aligned_addr)) && cp->index_table[generated_delta & INDEX_TABLE_MASK].index != -1 ){
+//            cache_access(cp,	/* cache to access */
+// 	        Read,		/* access type, Read or Write */
+// 	        aligned_addr,		/* address of access */
+// 	        NULL,			/* ptr to buffer for input/output */
+//	        cp->bsize,		/* number of bytes to access */
+//	        0,		/* time of access */
+//	        NULL,		/* for return of user data ptr */
+//	        NULL,	/* for address of replaced block */
+//	        1);		/* 1 if the access is a prefetch, 0 if it is not */
+////          fprintf(stderr, "issued prefetch prefetch_addr = %x, input addr = %x, delta calculated = %d, delta = %d\n",aligned_addr, addr,(cp->ghb[(ghb_index+1)%GLOBAL_TABLE_ROWS].addr - cp->ghb[ghb_index].addr), delta );
+//       }
+//        //cp->ghb[cp->head_ptr].tag = tag;
+//        //cp->ghb[cp->head_ptr].index = cp->index_table[it_index].index;
+//        //cp->ghb[cp->head_ptr].addr = addr;
+//        cp->index_table[it_index].index = cp->head_ptr;
+//        cp->head_ptr = (cp->head_ptr + 1) % GLOBAL_TABLE_ROWS;
+//        
+//   }
+//   else{
+//        cp->index_table[it_index].tag = delta;
+//        cp->index_table[it_index].index = cp->head_ptr;
+//        cp->ghb[cp->head_ptr].addr = addr;
+//        cp->ghb[cp->head_ptr].index = -1;
+//        cp->head_ptr = (cp->head_ptr + 1) % GLOBAL_TABLE_ROWS;
+//   }
+//
+//   //stride_prefetcher(cp, addr);
+//
+//}
 
 md_addr_t pc_mask(int rpt_entries){
     unsigned int num = 1;
@@ -995,6 +1003,8 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
             cp->rpt[RPT_index].stride = stride;
 
         if (cp->rpt[RPT_index].state == NO_PRED);
+        //if (cp->rpt[RPT_index].state != STEADY)//
+        //    open_ended_prefetcher(cp, addr);
         else {
             //generate prefetch 
             prefetch_addr = addr + stride;
@@ -1021,9 +1031,88 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
     }     
 }
 
+//void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
+void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr, int miss) {
+    int stride;
+    md_addr_t prefetch_addr;
+    int stride_shift =(int) (log(cp->rpt_entries)/log(2));
+    stride_shift += NUM_SHIFT_PC;
+    int RPT_index = (get_PC() >> NUM_SHIFT_PC) & pc_mask(cp->rpt_entries);
+    //printf("RPT_index = %d\n",RPT_index);
+    md_addr_t tag = (get_PC() >> stride_shift);
+    int old_state = cp->rpt[RPT_index].state;
+
+
+    if (tag == cp->rpt[RPT_index].tag_array) {
+        //tag is in cache, check stride
+        stride = addr - cp->rpt[RPT_index].prev_addr;
+        if (stride == cp->rpt[RPT_index].stride) {
+            if (cp->rpt[RPT_index].state == NO_PRED)
+                cp->rpt[RPT_index].state = TRANSIENT;
+            if (cp->rpt[RPT_index].state == TRANSIENT)
+                cp->rpt[RPT_index].state = STEADY;
+            if (cp->rpt[RPT_index].state == INIT)
+                cp->rpt[RPT_index].state = STEADY;
+            if (cp->rpt[RPT_index].state == STEADY)
+                cp->rpt[RPT_index].state = STEADY;
+        }
+        else {
+            if (cp->rpt[RPT_index].state == NO_PRED)
+                cp->rpt[RPT_index].state = NO_PRED;
+            if (cp->rpt[RPT_index].state == TRANSIENT)
+                cp->rpt[RPT_index].state = NO_PRED;
+            if (cp->rpt[RPT_index].state == INIT)
+                cp->rpt[RPT_index].state = TRANSIENT;
+            if (cp->rpt[RPT_index].state == STEADY)
+                cp->rpt[RPT_index].state = INIT; 
+        }
+        cp->rpt[RPT_index].prev_addr = addr;            
+        if(old_state != STEADY)
+            cp->rpt[RPT_index].stride = stride;
+
+        if (cp->rpt[RPT_index].state == NO_PRED) {
+//            if(miss)
+            open_ended_prefetcher_markov(cp, addr, 1);
+         }   
+       // if (cp->rpt[RPT_index].state != STEADY);//
+       //     open_ended_prefetcher(cp, addr);
+        else if(cp->rpt[RPT_index].state == STEADY){
+            if(miss)
+                open_ended_prefetcher_markov(cp, addr, 0);
+            //generate prefetch 
+            prefetch_addr = addr + stride;
+            //align addr to block
+            prefetch_addr = prefetch_addr - (prefetch_addr % cp->bsize);
+            if (!(prefetch_addr_in_cache(cp, prefetch_addr)))
+                cache_access(cp,	/* cache to access */
+ 	            Read,		/* access type, Read or Write */
+ 	            prefetch_addr,		/* address of access */
+ 	            NULL,			/* ptr to buffer for input/output */
+	            cp->bsize,		/* number of bytes to access */
+	            0,		/* time of access */
+	            NULL,		/* for return of user data ptr */
+	            NULL,	/* for address of replaced block */
+	            1);		/* 1 if the access is a prefetch, 0 if it is not */
+       }
+       else{
+            if(miss)
+                open_ended_prefetcher_markov(cp, addr, 0);
+           
+       } 
+    }     
+	else {
+        //tag not in cache, update RPT
+        cp->rpt[RPT_index].tag_array = tag;
+        cp->rpt[RPT_index].prev_addr = addr;
+        cp->rpt[RPT_index].stride = 0;
+        cp->rpt[RPT_index].state = 2;
+        if(miss)
+            open_ended_prefetcher_markov(cp, addr, 0);
+    }     
+}
 
 /* cache x might generate a prefetch after a regular cache access to address addr */
-void generate_prefetch(struct cache_t *cp, md_addr_t addr) {
+void generate_prefetch(struct cache_t *cp, md_addr_t addr, int miss) {
 
 	switch(cp->prefetch_type) {
 		case 0:
@@ -1036,7 +1125,7 @@ void generate_prefetch(struct cache_t *cp, md_addr_t addr) {
 		   break;
 		case 2:
 		   // Open Ended Prefetcher
-		   open_ended_prefetcher(cp, addr);
+		   open_ended_prefetcher(cp, addr, miss);
 		   break;
 		default:
 		   // Stride Prefetcher with cp->prefetch_type number of entries in the Reference Prediction Table (RPT)
@@ -1238,8 +1327,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
     link_htab_ent(cp, &cp->sets[set], repl);
 
   if (prefetch == 0) {	/* only regular cache accesses can generate a prefetch */
-  	generate_prefetch(cp, addr);
 /* ECE552 Assignment 5 - BEGIN CODE*/
+  	generate_prefetch(cp, addr, 1);
         cp->last_addr = addr;
 /* ECE552 Assignment 5 - END CODE*/
   }
@@ -1292,7 +1381,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
     *udata = blk->user_data;
 
   if (prefetch == 0) {	/* only regular cache accesses can generate a prefetch */
-	generate_prefetch(cp, addr);
+	generate_prefetch(cp, addr, 0);
 /* ECE552 Assignment 5 - BEGIN CODE*/
         cp->last_addr = addr;
 /* ECE552 Assignment 5 - END CODE*/
@@ -1342,7 +1431,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   if (prefetch == 0) {	/* only regular cache accesses can generate a prefetch */
      
-     generate_prefetch(cp, addr);
+     generate_prefetch(cp, addr, 0);
  
 /* ECE552 Assignment 5 - BEGIN CODE*/
         cp->last_addr = addr;

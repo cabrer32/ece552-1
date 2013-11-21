@@ -175,12 +175,15 @@
 //#define RPT_ENTRIES 16
 //#define RPT_ENTRIES 8
 
-#define INDEX_TABLE_ROWS 1024
-#define INDEX_TABLE_TAG_SHIFT 10   
-#define INDEX_TABLE_MASK 0x03ff
-#define GLOBAL_TABLE_ROWS 65536
-#define TIMEOUT_WIDTH 8
-#define TIMEOUT_DEPTH 4
+//#define INDEX_TABLE_ROWS 1024
+#define INDEX_TABLE_ROWS 1048576
+//#define INDEX_TABLE_TAG_SHIFT 10   
+#define INDEX_TABLE_MASK 0x0fffff
+//#define GLOBAL_TABLE_ROWS 4194304
+#define GLOBAL_TABLE_ROWS 16777216
+//#define GLOBAL_TABLE_ROWS 67108864
+#define TIMEOUT_WIDTH 5
+#define TIMEOUT_DEPTH 5
 
 /* ECE552 Assignment 5 - END CODE*/
 
@@ -251,7 +254,7 @@ struct cache_set_t
 
 
 typedef struct {
-    md_addr_t tag;
+//    int tag;
     int index;
     md_addr_t addr;
 
@@ -408,7 +411,7 @@ void cache_stats(struct cache_t *cp, FILE *stream);
 /* figure out what type of prefetcher is used by this cache and
    call the appropriate function to generate the prefetch (e.g., next_line_prefetcher) */
 
-void generate_prefetch(struct cache_t *cp, md_addr_t addr);
+void generate_prefetch(struct cache_t *cp, md_addr_t addr, int miss);
 
 /* Next Line Prefetcher */
 void next_line_prefetcher(struct cache_t *cp, md_addr_t addr);
@@ -417,7 +420,7 @@ void next_line_prefetcher(struct cache_t *cp, md_addr_t addr);
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr);
 
 /* Opend Ended Prefetcher */
-void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr);
+void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr, int miss);
 
 /* access a cache, perform a CMD operation on cache CP at address ADDR,
    places NBYTES of data at *P, returns latency of operation if initiated
