@@ -45,11 +45,21 @@ machine(L1Cache, "MSI L1 Cache")
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
 
     /* ECE552: Complete this section here */
-   
+    S, AccessPermission:Read_Only, desc="Shared stable state, block shared and read only";
+    M, AccessPermission:Read_Write, desc="Modified stable state, owned and read writable";
+     
     //========================
     //ECE552: Transient States
     //========================
-
+    
+    IS_D, AccessPermission:Busy, desc="Invalid to Shared waiting on Data from owner(dir or remote)"
+    IM_AD, AccessPermission:Busy, desc="Invalid to Modified waiting on Data from owner(dir or remote)  and Inv_Acks(from sharers remaining)";
+    IM_A, AccessPermission:Busy, desc="Invalid to Modified, recieved data waiting for Inv_Acks(from sharers remaining)"
+    SM_AD, AccessPermission:Busy, desc="Shared to Modified,  waiting on Data from owner(dir or remote) and Inv_Acks(from sharers remaining)"
+    SM_A, AccessPermission:Busy, desc="Shared to Modified, recieved data waiting for Inv_Acks(from sharers remaining)"
+    MI_A, AccessPermission:Busy, desc="Modified to Invalid, waiting for Put-Ack from directory, remains owner of block"
+    SI_A, AccessPermission:Busy, desc="Shared to Invalid, waiting for Put-Ack from directory, remains sharer, has to respond to Invalidations with Inv_Acks"
+    II_A, AccessPermission:Busy, desc="Invalid, waiting for Put-Ack from directory"    
     /* ECE552: Complete this section here */
 
   }

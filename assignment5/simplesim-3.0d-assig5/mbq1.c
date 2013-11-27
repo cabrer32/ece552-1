@@ -25,9 +25,7 @@ int main(){
 
     //expected total misses, the first loop 0 misses, the second loop 1/32*320000 = 10000 misses
     
-    //return array[LOOPS - 1];
     return array[LOOPS -1] + array_2[LOOPS_2 - 1];
-    //return array_2[LOOPS_2 - 1];
 
 }
 

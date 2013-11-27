@@ -40,13 +40,16 @@ machine(Directory, "Directory protocol")
 
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
     M, AccessPermission:Read_Write, desc="Modified";
-
+    
     /* ECE552: Complete this section here */
+    S, AccessPermission:Read_Only, desc="Shared stable state, block shared and read only";
 
     //========================
     //ECE552: Transient States
     //========================
-
+    
+    S_D, AccessPermission:Busy, desc="Waiting for Data from owner who is relinquishing ownership and changing to S"
+    
     /* ECE552: Complete this section here */
   }
 
@@ -535,7 +538,48 @@ getDirectoryEntry(address).Sharers);
   // TRANSITIONS
   // =============================================================================
 
+//  enumeration(Event, desc="Directory events") {
+//
+//    GETM, desc="A GETM arrives";
+//    GETS, desc="A GETS arrives";
+//    PUTM, desc="A PUTM arrives";
+//    PUTM_Owner, desc="A PUTM arrives from Owner";
+//    PUTM_NotOwner, desc="A PUTM arrives";
+//
+//    PUTS_NotLast, desc="A PUTS_NotLast arrives";
+//    PUTS_Last, desc="A PUTS_Last arrives";
+//    PUT_Ack, desc="Sending a PUT_Ack message";
+//
+//    // Memory Controller
+//    Memory_Data, desc="Fetched data from memory arrives";
+//    Memory_Ack, desc="Writeback Ack from memory arrives";
+//
+//    Data, desc="Data sent from L1 Cache";
+//  }
+
   /* ECE552: Complete this section here */
 
+  transition (I, GETS, S) {
+    //send data to requestor, add requestor to sharers
+  }    
+  
+  transition (I, GETM, M) {
+    //send data to requestor, add requestor to sharers
+  }    
 
+  transition (I, {PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, I) {
+    //send Put-Ack to requestor
+  }
+  
+  transition (S, GETS, S) {
+    //send data to req, add req to sharers    
+  }
+  
+  transition (S, GETM, M) {
+    //send data to req, send inv to sharers, clear sharers, set owner to req    
+  }
+
+  transition (S, {PUTS_NotLast, PUTM_NotOwner}, S) {
+    //remove req from sharers, send 
+  }    
 }

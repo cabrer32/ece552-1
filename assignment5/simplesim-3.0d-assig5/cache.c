@@ -702,7 +702,7 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
         cp->rpt[RPT_index].tag_array = tag;
         cp->rpt[RPT_index].prev_addr = addr;
         cp->rpt[RPT_index].stride = 0;
-        cp->rpt[RPT_index].state = 2;
+        cp->rpt[RPT_index].state = INIT;
     }     
 }
 
@@ -775,10 +775,10 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr, int miss) {
         cp->rpt[RPT_index].tag_array = tag;
         cp->rpt[RPT_index].prev_addr = addr;
         cp->rpt[RPT_index].stride = 0;
-        cp->rpt[RPT_index].state = 2;
+        cp->rpt[RPT_index].state = INIT;
         if(miss)
             markov_prefetcher(cp, addr, 0);
-    }     
+    }
 }
 
 /* cache x might generate a prefetch after a regular cache access to address addr */
@@ -1180,13 +1180,6 @@ cache_flush(struct cache_t *cp,		/* cache instance to flush */
 	    }
 	}
     }
-/* ECE552 Assignment 5 - BEGIN CODE*/
-    //free(cp->rpt);
-    //free(cp->RPT_tag_array);
-    //free(cp->RPT_prev_addr);
-    //free(cp->RPT_stride);
-    //free(cp->RPT_state);
-/* ECE552 Assignment 5 - END CODE*/
   /* return latency of the flush operation */
   return lat;
 }

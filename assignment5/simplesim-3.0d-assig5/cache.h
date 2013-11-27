@@ -172,6 +172,7 @@ struct cache_set_t
 				   access to cache blocks */
 };
 
+/* ECE552 Assignment 5 - BEGIN CODE*/
 typedef struct {
     int index;
     md_addr_t addr;
@@ -183,6 +184,7 @@ typedef struct{
     int stride;
     int state;
 }RPT_row;
+/* ECE552 Assignment 5 - END CODE*/
 
 /* cache definition */
 struct cache_t
@@ -314,6 +316,7 @@ void cache_stats(struct cache_t *cp, FILE *stream);
 /* figure out what type of prefetcher is used by this cache and
    call the appropriate function to generate the prefetch (e.g., next_line_prefetcher) */
 
+/* ECE552 Assignment 5 - BEGIN CODE*/
 void generate_prefetch(struct cache_t *cp, md_addr_t addr, int miss);
 
 /* Next Line Prefetcher */
@@ -324,6 +327,7 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr);
 
 /* Opend Ended Prefetcher */
 void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr, int miss);
+/* ECE552 Assignment 5 - END CODE*/
 
 /* access a cache, perform a CMD operation on cache CP at address ADDR,
    places NBYTES of data at *P, returns latency of operation if initiated
