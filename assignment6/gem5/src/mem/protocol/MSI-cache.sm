@@ -612,5 +612,169 @@ machine(L1Cache, "MSI L1 Cache")
 
   /* ECE552: Complete this section here */
  
+  //enumeration(Event, desc="Cache events") {
+
+  //  //=================================================================================================================
+  //  //ECE552: L1 Events triggered from the local processor explicitly (i.e., memory request) or implicitly (replacement)
+  //  //=================================================================================================================
+  //  Load,       desc="Load request from processor";
+  //  Ifetch,     desc="Ifetch request from processor";
+  //  Store,      desc="Store request from processor";
+
+  //  Replacement,  desc="Replace L1 cache block";
+
+  //  //========================================================================
+  //  //ECE552: Requests forwarded to the L1 cache from the directory controller 
+  //  //========================================================================
+  //  Fwd_GetS,   desc="GetS forwarded from the directory"; //ECE552: original request was for read access
+  //  Fwd_GetM,   desc="GetM forwarded from the directory"; //ECE552: original request was for write access
+  //  Inv,        desc="Invalidate request from the directory";
+
+  //  WB_Ack,     desc="Ack from the directory for a writeback";
+  //  
+  //  Inv_Ack,	 desc="Invalidate Ack";
+  //  Inv_Ack_all, desc="Last Invalidate Ack";
+
+  //  Data_from_Dir_No_Acks,       desc="Data from Directory, 0 Acks";
+  //  Data_from_Dir_Ack_Cnt,       desc="Data from Directory, along with Ack Count";
+  //  Data_from_Dir_Ack_Cnt_Last,  desc="Data from Directory, along with Ack Count, arrive after Inv_Ack";
+  //  Data_from_Owner,		 desc="Data from remote L1 (remote Owner)";
+
+  //}
+  transition(I, Load, IS_D){
+    //send GetS to Dir
+  }
+  transition(I, Store, IM_AD){
+    //send GetS to Dir
+  }
+  transition(IS_D, {Load, Store, Replacement, Inv},IS_D){
+    //stall  
+   }  
+  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S){
+    //go to shared
+   }  
+  transition(IM_AD, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_AD){
+    //stall  
+   }  
+  transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M){
+     //go to modified 
+   }
+  transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A){
+    //go to IM_A  
+      
+  } 
+  transition(IM_AD, Inv_Ack, IM_AD){
+     //acks --
+  }
+
+  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A){
+     //stall
+  }
+  transition(IM_A, Inv_Ack, IM_A){
+     //acks --
+  }
+  transition(IM_A, Inv_Ack_all, M){
+     //go to modified
+  }
+  transition(S, Load, S){
+     //hit
+  }
+  transition(S, Store, SM_AD){
+     //send GETM to dir
+  }
+  transition(S, Replacement, SI_A){
+     //send PUTS to dir
+  }
+  transition(S, Inv, I){
+     //send Inv-Ack to Requestor
+  }
+
+  transition(SM_AD, Load, SM_AD){
+     //hit
+  }
+
+  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
+     //stall
+  }
+
+  transition(SM_AD, Inv, IM_AD){
+     //send Inv-Ack to Requestor
+  }
+
+  transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, IM_AD){
+     //send Inv-Ack to Requestor
+  }
+
+  transition(SM_AD, Data_from_Dir_Ack_Cnt, SM_A){
+     //go to SM_A
+  }
+  
+  transition(SM_AD, Inv_Ack, SM_AD){
+     //acks --
+  }
+
+  transition(SM_A, Load, SM_A){
+     //hit
+  }
+
+  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
+     //stall
+  }
+  
+  transition(SM_A, Inv_Ack, SM_A){
+     //acks --
+  }
+  
+  transition(SM_A, Inv_Ack_all, M){
+     //go to modified
+  }
+
+  transition(M, {Load, Store},  M){
+     //hit
+  }
+
+  transition(M, Replacement,  MI_A){
+     //send PUTM and Data to dir
+  }
+
+
+  transition(M, Fwd_GetS,  S){
+     //send Data to Requestor and Dir
+  }
+
+  transition(M, Fwd_GetM,  I){
+     //send Data to Requestor 
+  }
+
+
+  transition(MI_A, {Load, Store, Replacement},  MI_A){
+     //stall 
+  }
+
+  transition(MI_A, Fwd_GetS,  SI_A){
+     //send Data to Requestor and Dir
+  }
+
+  transition(MI_A, Fwd_GetM,  II_A){
+     //send Data to Requestor
+  }
+
+
+  transition(SI_A, {Load, Store, Replacement},  SI_A){
+     //stall 
+  }
+
+
+  transition(SI_A, Inv, II_A){
+     //send Inv-Ack to Requestor
+  }
+
+  transition({MI_A,SI_A, II_A} WB_Ack,  I){
+     //go to invalidate
+  }
+  
+  transition(II_A, {Load, Store, Replacement},  II_A){
+     //stall 
+  }
 
 }
