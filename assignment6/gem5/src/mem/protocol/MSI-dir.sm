@@ -559,25 +559,95 @@ getDirectoryEntry(address).Sharers);
 
   /* ECE552: Complete this section here */
 
-  transition (I, GETS, S) {
-    //send data to requestor, add requestor to sharers
+  transition (I, GETS, IS_D) {
+    //fetch data from memory
+    vv_allocateTBEFromRequestNet;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
+
   }    
+  transition(IS_D, {GETS, GETM}, IS_D){
+    z_stall;
+  }
   
-  transition (I, GETM, M) {
+  transition(IS_D, Memory_Data, S){
+    //add to sharers once data is received    
+    ars1_addRequestorToSharers;
+    d_sendData;
+    w_deallocateTBE;
+    qm_popMemQueue;
+  } 
+  
+  transition (I, GETM, IM_D) {
     //send data to requestor, add requestor to sharers
+    vv_allocateTBEFromRequestNet;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
   }    
 
+  transition(IM_D, {GETM, GETS},  IM_D){
+    z_stall;
+  }
+  
+  transition(IM_D, Memory_Data, M){
+    //set requestor to owner, send data to requestor    
+    e_ownerIsRequestor;
+    d_sendData;
+    w_deallocateTBE;
+    qm_popMemQueue;
+  } 
+  
+ 
+ 
   transition (I, {PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, I) {
     //send Put-Ack to requestor
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+
   }
   
-  transition (S, GETS, S) {
-    //send data to req, add req to sharers    
+  transition (S, GETS, SS_D) {
+    //send data to req, add req to sharers
+    vv_allocateTBEFromRequestNet;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
   }
+
+  transition(SS_D, {GETS, GETM, PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, SS_D){
+    z_stall;  
+   } 
   
-  transition (S, GETM, M) {
-    //send data to req, send inv to sharers, clear sharers, set owner to req    
+  transition(SS_D, Memory_Data, S){
+    //add requestor to sharers, send data to requestor    
+     ars1_addRequestorToSharers;
+     d_sendData;
+     w_deallocateTBE;
+     qm_popMemQueue;
+
   }
+ 
+  
+  transition (S, GETM, SM_D) {
+    //send data to req, send inv to sharers, clear sharers, set owner to req   
+    
+    vv_allocateTBEFromRequestNet;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
+     
+  }
+
+  transition(SM_D, {GETS, GETM, PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, SM_D){
+    z_stall;
+
+   }
+
+   transition(SM_D, Memory_Data, M){
+    e_ownerIsRequestor;
+
+
+
+   }
+
 
   transition (S, {PUTS_NotLast, PUTM_NotOwner}, S) {
     //remove req from sharers, send 
