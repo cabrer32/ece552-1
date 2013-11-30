@@ -52,14 +52,14 @@ machine(L1Cache, "MSI L1 Cache")
     //ECE552: Transient States
     //========================
     
-    IS_D, AccessPermission:Busy, desc="Invalid to Shared waiting on Data from owner(dir or remote)"
+    IS_D, AccessPermission:Busy, desc="Invalid to Shared waiting on Data from owner(dir or remote)";
     IM_AD, AccessPermission:Busy, desc="Invalid to Modified waiting on Data from owner(dir or remote)  and Inv_Acks(from sharers remaining)";
-    IM_A, AccessPermission:Busy, desc="Invalid to Modified, recieved data waiting for Inv_Acks(from sharers remaining)"
-    SM_AD, AccessPermission:Busy, desc="Shared to Modified,  waiting on Data from owner(dir or remote) and Inv_Acks(from sharers remaining)"
-    SM_A, AccessPermission:Busy, desc="Shared to Modified, recieved data waiting for Inv_Acks(from sharers remaining)"
-    MI_A, AccessPermission:Busy, desc="Modified to Invalid, waiting for Put-Ack from directory, remains owner of block"
-    SI_A, AccessPermission:Busy, desc="Shared to Invalid, waiting for Put-Ack from directory, remains sharer, has to respond to Invalidations with Inv_Acks"
-    II_A, AccessPermission:Busy, desc="Invalid, waiting for Put-Ack from directory"    
+    IM_A, AccessPermission:Busy, desc="Invalid to Modified, recieved data waiting for Inv_Acks(from sharers remaining)";
+    SM_AD, AccessPermission:Busy, desc="Shared to Modified,  waiting on Data from owner(dir or remote) and Inv_Acks(from sharers remaining)";
+    SM_A, AccessPermission:Busy, desc="Shared to Modified, recieved data waiting for Inv_Acks(from sharers remaining)";
+    MI_A, AccessPermission:Busy, desc="Modified to Invalid, waiting for Put-Ack from directory, remains owner of block";
+    SI_A, AccessPermission:Busy, desc="Shared to Invalid, waiting for Put-Ack from directory, remains sharer, has to respond to Invalidations with Inv_Acks";
+    II_A, AccessPermission:Busy, desc="Invalid, waiting for Put-Ack from directory";    
     /* ECE552: Complete this section here */
 
   }
@@ -491,7 +491,9 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   action(n_popResponseQueue, "n", desc="Pop the response queue") {
+    
     profileMsgDelay(1, responseNetwork_in.dequeue_getDelayCycles());
+
   }
 
   action(o_popForwardedRequestQueue, "o", desc="Pop the forwarded request queue") {
@@ -642,36 +644,37 @@ machine(L1Cache, "MSI L1 Cache")
 
   //}
   
-  transition(I, Load, IS_D){
-    //send GetS to Dir
-    v_allocateTBE;
-    i_allocateL1CacheBlock;
-    as_issueGetS;
-    p_profileMiss;
-    m_popMandatoryQueue;
-  }
+//  transition(I, Load, IS_D){
+//    //send GetS to Dir
+//    v_allocateTBE;
+//    i_allocateL1CacheBlock;
+//    as_issueGetS;
+//    p_profileMiss;
+//    m_popMandatoryQueue;
+//  }
   
   transition(I, Store, IM_AD){
     //send GetM to Dir
     v_allocateTBE;
     i_allocateL1CacheBlock;
-    am_issueGetM;
     p_profileMiss;
+    am_issueGetM;
     m_popMandatoryQueue;
   }
   
-  transition(IS_D, {Load, Store, Replacement, Inv},IS_D){
-    //stall  
-    z_stall;
-   }  
-  
-  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S){
-    //go to shared
-    w_deallocateTBE;
-    u_writeDataToCache;
-    n_popResponseQueue;
-   }  
-  
+//  transition(IS_D, {Load, Store, Replacement, Inv},IS_D){
+//    //stall  
+//    z_stall;
+//   }  
+//  
+//  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S){
+//    //go to shared
+//    u_writeDataToCache;
+//    rx_load_hit;
+//    w_deallocateTBE;
+//    n_popResponseQueue;
+//   }  
+//  
   transition(IM_AD, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_AD){
     //stall  
     z_stall;
@@ -679,137 +682,139 @@ machine(L1Cache, "MSI L1 Cache")
   
   transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M){
      //go to modified 
-    w_deallocateTBE;
     u_writeDataToCache;
+    sx_store_hit;
+    w_deallocateTBE;
     n_popResponseQueue;
    }
   
-  transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A){
-    //go to IM_A  
-    u_writeDataToCache;
-    n_popResponseQueue;
-      
-  } 
-  
-  transition(IM_AD, Inv_Ack, IM_AD){
-     //acks --
-     q_updateAckCount;
-     n_popResponseQueue;
-
-  }
-
-  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A){
-     //stall
-    z_stall;
-  }
-  transition(IM_A, Inv_Ack, IM_A){
-     //acks --
-     q_updateAckCount;
-     n_popResponseQueue;
-  }
-  transition(IM_A, Inv_Ack_all, M){
-     //go to modified
-    w_deallocateTBE;
-    sx_store_hit;
-    n_popResponseQueue;
-
-  }
-  transition(S, Load, S){
-     //hit
-     r_load_hit;
-     m_popMandatoryQueue;
-  }
-  
-  transition(S, Store, SM_AD){
-     //send GETM to dir
-    v_allocateTBE;
-    am_issueGetM;
-    p_profileMiss;
-    m_popMandatoryQueue;
-     
-
-  }
-  
-  transition(S, Replacement, SI_A){
-     //send PUTS to dir
-    v_allocateTBE;
-    bs_issuePUTS;
-    m_popMandatoryQueue;
-
-  }
-
-  transition(S, Inv, I){
-     //send Inv-Ack to Requestor
-     fi_sendInvAck;
-     o_popForwardedRequestQueue;
-
-  }
-
-  transition(SM_AD, Load, SM_AD){
-     //hit
-     r_load_hit;
-     m_popMandatoryQueue;
-  }
-
-  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
-     //stall
-    z_stall;
-  }
-
-  transition(SM_AD, Inv, IM_AD){
-     //send Inv-Ack to Requestor
-     fi_sendInvAck;
-     o_popForwardedRequestQueue;
-
-  }
-
-  transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, IM_AD){
-     //send Inv-Ack to Requestor
-     fi_sendInvAck;
-     n_popResponseQueue;
-  }
-
-  transition(SM_AD, Data_from_Dir_Ack_Cnt, SM_A){
-     //go to SM_A
-     n_popResponseQueue;
-  }
-  
-  transition(SM_AD, Inv_Ack, SM_AD){
-     //acks --
-     q_updateAckCount;
-     n_popResponseQueue;
-
-  }
-
-  transition(SM_A, Load, SM_A){
-     //hit
-     r_load_hit;
-     m_popMandatoryQueue;
-  
-  }
-
-  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
-     //stall
-    z_stall;
-  }
-  
-  transition(SM_A, Inv_Ack, SM_A){
-     //acks --
-     q_updateAckCount;
-     n_popResponseQueue;
-  }
-  
-  transition(SM_A, Inv_Ack_all, M){
-     //go to modified
-    w_deallocateTBE;
-    n_popResponseQueue;
-  }
-  
-  transition(M, Load,  M){
-     //hit
-     r_load_hit;
-     m_popMandatoryQueue;
-  }
+//  transition(IM_AD,{Data_from_Dir_Ack_Cnt,Data_from_Dir_Ack_Cnt_Last}, IM_A){
+//    //go to IM_A  
+//    u_writeDataToCache;
+//    q_updateAckCount;
+//    n_popResponseQueue;
+//      
+//  } 
+//  
+//  transition(IM_AD, Inv_Ack, IM_AD){
+//     //acks --
+//     q_updateAckCount;
+//     n_popResponseQueue;
+//
+//  }
+//
+//  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A){
+//     //stall
+//    z_stall;
+//  }
+//  transition(IM_A, Inv_Ack, IM_A){
+//     //acks --
+//     q_updateAckCount;
+//     n_popResponseQueue;
+//  }
+//
+//  transition(IM_A, Inv_Ack_all, M){
+//     //go to modified
+//    sx_store_hit;
+//    w_deallocateTBE;
+//    n_popResponseQueue;
+//
+//  }
+//  transition(S, Load, S){
+//     //hit
+//     r_load_hit;
+//     m_popMandatoryQueue;
+//  }
+//  
+//  transition(S, Store, SM_AD){
+//     //send GETM to dir
+//    v_allocateTBE;
+//    am_issueGetM;
+//    p_profileMiss;
+//    m_popMandatoryQueue;
+//     
+//
+//  }
+//  
+//  transition(S, Replacement, SI_A){
+//     //send PUTS to dir
+//    v_allocateTBE;
+//    bs_issuePUTS;
+//    m_popMandatoryQueue;
+//
+//  }
+//
+//  transition(S, Inv, I){
+//     //send Inv-Ack to Requestor
+//     h_deallocateL1CacheBlock;
+//     forward_eviction_to_cpu;
+//     fi_sendInvAck;
+//     o_popForwardedRequestQueue;
+//
+//  }
+//
+//  transition(SM_AD, Load, SM_AD){
+//     //hit
+//     r_load_hit;
+//     m_popMandatoryQueue;
+//  }
+//
+//  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
+//     //stall
+//    z_stall;
+//  }
+//
+//  transition(SM_AD, Inv, IM_AD){
+//     //send Inv-Ack to Requestor
+//     fi_sendInvAck;
+//     o_popForwardedRequestQueue;
+//
+//  }
+//
+//  transition(SM_AD, {Data_from_Dir_Ack_Cnt, Data_from_Dir_Ack_Cnt_Last},  SM_A){
+//     //go to SM_A
+//     u_writeDataToCache;
+//     q_updateAckCount;
+//     n_popResponseQueue;
+//  }
+//  
+//  transition(SM_AD, Inv_Ack, SM_AD){
+//     //acks --
+//     q_updateAckCount;
+//     n_popResponseQueue;
+//
+//  }
+//
+//  transition(SM_A, Load, SM_A){
+//     //hit
+//     r_load_hit;
+//     m_popMandatoryQueue;
+//  
+//  }
+//
+//  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
+//     //stall
+//    z_stall;
+//  }
+//  
+//  transition(SM_A, Inv_Ack, SM_A){
+//     //acks --
+//     q_updateAckCount;
+//     n_popResponseQueue;
+//  }
+//  
+//  transition(SM_A, Inv_Ack_all, M){
+//     //go to modified
+//    sx_store_hit;
+//    w_deallocateTBE;
+//    n_popResponseQueue;
+//  }
+//  
+//  transition(M, Load,  M){
+//     //hit
+//     r_load_hit;
+//     m_popMandatoryQueue;
+//  }
 
   transition(M, Store,  M){
      //hit
@@ -822,68 +827,69 @@ machine(L1Cache, "MSI L1 Cache")
     v_allocateTBE;
     bm_issuePUTM;
     x_copyDataFromCacheToTBE;
+    m_popMandatoryQueue;
   }
 
 
-  transition(M, Fwd_GetS,  S){
-     //send Data to Requestor and Dir
-     e_sendDataFromCacheToRequestor;
-     de_sendDataFromCacheToDir;
-     o_popForwardedRequestQueue; 
-
-  }
-
-  transition(M, Fwd_GetM,  I){
-     //send Data to Requestor 
-     e_sendDataFromCacheToRequestor;
-     h_deallocateL1CacheBlock;
-     forward_eviction_to_cpu;
-     o_popForwardedRequestQueue; 
-  }
-
-
+//  transition(M, Fwd_GetS,  S){
+//     //send Data to Requestor and Dir
+//     e_sendDataFromCacheToRequestor;
+//     de_sendDataFromCacheToDir;
+//     o_popForwardedRequestQueue; 
+//
+//  }
+//
+//  transition(M, Fwd_GetM,  I){
+//     //send Data to Requestor 
+//     e_sendDataFromCacheToRequestor;
+//     h_deallocateL1CacheBlock;
+//     forward_eviction_to_cpu;
+//     o_popForwardedRequestQueue; 
+//  }
+//
+//
   transition(MI_A, {Load, Store, Replacement},  MI_A){
      //stall 
     z_stall;
   }
 
-  transition(MI_A, Fwd_GetS,  SI_A){
-     //send Data to Requestor and Dir
-     ee_sendDataFromTBEToRequestor;
-     dee_sendDataFromTBEToDir;
-     o_popForwardedRequestQueue; 
-  }
-
-  transition(MI_A, Fwd_GetM,  II_A){
-     //send Data to Requestor
-     ee_sendDataFromTBEToRequestor;
-     o_popForwardedRequestQueue; 
-  }
-
-
-  transition(SI_A, {Load, Store, Replacement},  SI_A){
-     //stall 
-    z_stall;
-  }
-
-
-  transition(SI_A, Inv, II_A){
-     //send Inv-Ack to Requestor
-     fi_sendInvAck;
-     o_popForwardedRequestQueue;
-  }
+//  transition(MI_A, Fwd_GetS,  SI_A){
+//     //send Data to Requestor and Dir
+//     ee_sendDataFromTBEToRequestor;
+//     dee_sendDataFromTBEToDir;
+//     o_popForwardedRequestQueue; 
+//  }
+//
+//  transition(MI_A, Fwd_GetM,  II_A){
+//     //send Data to Requestor
+//     ee_sendDataFromTBEToRequestor;
+//     o_popForwardedRequestQueue; 
+//  }
+//
+//
+//  transition(SI_A, {Load, Store, Replacement},  SI_A){
+//     //stall 
+//    z_stall;
+//  }
+//
+//
+//  transition(SI_A, Inv, II_A){
+//     //send Inv-Ack to Requestor
+//     fi_sendInvAck;
+//     o_popForwardedRequestQueue;
+//  }
 
   transition({MI_A,SI_A, II_A}, WB_Ack,  I){
      //go to invalidate
-    w_deallocateTBE;
     h_deallocateL1CacheBlock;
     forward_eviction_to_cpu;
+    w_deallocateTBE;
     o_popForwardedRequestQueue;
   }
   
-  transition(II_A, {Load, Store, Replacement},  II_A){
-     //stall 
-    z_stall;
-  }
+//  transition(II_A, {Load, Store, Replacement},  II_A){
+//     //stall 
+//    z_stall;
+//  }
 
 }

@@ -48,8 +48,12 @@ machine(Directory, "Directory protocol")
     //ECE552: Transient States
     //========================
     
-    S_D, AccessPermission:Busy, desc="Waiting for Data from owner who is relinquishing ownership and changing to S"
-    
+    S_D, AccessPermission:Busy, desc="Waiting for Data from owner who is relinquishing ownership and changing to S";
+    S_A, AccessPermission:Busy, desc="Waiting for Ack from memory before changing to S";
+    MI_A, AccessPermission:Busy, desc="Waiting for Ack from memory before changing to I";
+    IM_D, AccessPermission:Busy, desc="Waiting for data from memory before changing to M";
+    IS_D, AccessPermission:Busy, desc="Waiting for data from memory before changing to S";
+        
     /* ECE552: Complete this section here */
   }
 
@@ -559,97 +563,162 @@ getDirectoryEntry(address).Sharers);
 
   /* ECE552: Complete this section here */
 
-  transition (I, GETS, IS_D) {
-    //fetch data from memory
-    vv_allocateTBEFromRequestNet;
-    qf_queueMemoryFetchRequest;
-    i_popIncomingRequestQueue;
-
-  }    
-  transition(IS_D, {GETS, GETM}, IS_D){
-    z_stall;
-  }
-  
-  transition(IS_D, Memory_Data, S){
-    //add to sharers once data is received    
-    ars1_addRequestorToSharers;
-    d_sendData;
-    w_deallocateTBE;
-    qm_popMemQueue;
-  } 
+//  transition (I, GETS, IS_D) {
+//    //fetch data from memory
+//    vv_allocateTBEFromRequestNet;
+//    qf_queueMemoryFetchRequest;
+//    i_popIncomingRequestQueue;
+//
+//  }    
+//  
+//  transition(IS_D, {GETS, GETM}, IS_D){
+//    z_stall;
+//  }
+//  
+//  transition(IS_D, Memory_Data, S){
+//    //add to sharers once data is received    
+//    ars1_addRequestorToSharers;
+//    d_sendData;
+//    w_deallocateTBE;
+//    qm_popMemQueue;
+//  } 
   
   transition (I, GETM, IM_D) {
     //send data to requestor, add requestor to sharers
     vv_allocateTBEFromRequestNet;
+    e_ownerIsRequestor;
     qf_queueMemoryFetchRequest;
     i_popIncomingRequestQueue;
   }    
 
-  transition(IM_D, {GETM, GETS},  IM_D){
-    z_stall;
-  }
+//  transition(IM_D, {GETM, GETS},  IM_D){
+//    z_stall;
+//  }
   
   transition(IM_D, Memory_Data, M){
     //set requestor to owner, send data to requestor    
-    e_ownerIsRequestor;
     d_sendData;
     w_deallocateTBE;
     qm_popMemQueue;
   } 
+ 
+//  transition (I, {PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, I) {
+//    //send Put-Ack to requestor
+//    a_sendWriteBackAck;
+//    i_popIncomingRequestQueue;
+//  }
   
- 
- 
-  transition (I, {PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, I) {
-    //send Put-Ack to requestor
-    a_sendWriteBackAck;
-    i_popIncomingRequestQueue;
+//  transition (S, GETS, S) {
+//    //send data to req, add req to sharers   
+//    ds_sendSharedData;
+//    ars2_addRequestorToSharers;
+//    i_popIncomingRequestQueue;
+//  }
+//  
+//  transition (S, GETM, M) {
+//    //send data to req, send inv to sharers, clear sharers, set owner to req   
+//    
+//   ds2_sendSharedData;
+//   fwm_sendFwdInvToSharersMinusRequestor;
+//     
+//   cs_clearSharers;
+//   e_ownerIsRequestor;
+//
+//   i_popIncomingRequestQueue;
+//     
+//  }
+//
+//
+//
+//  transition (S, {PUTS_NotLast, PUTM_NotOwner}, S) {
+//    //remove req from sharers, send PUT-Ack to Requstor
+//    kk_removeRequestSharer;
+//    a_sendWriteBackAck;
+//    i_popIncomingRequestQueue;
+//  }    
+//
+//
+//  transition (S, PUTS_Last, I) {
+//    //remove req from sharers, send put-ack to requestor
+//    kk_removeRequestSharer;
+//    a_sendWriteBackAck;
+//    i_popIncomingRequestQueue;
+//  }
+//
+//  transition (M, GETS, S_D) {
+//    //send Fwd-GetS to Owner, add req and owner to sharers, clear owners
+//    vv_allocateTBEFromRequestNet; 
+//    f_forwardRequest;
+//    ars2_addRequestorToSharers;
+//    aos_addOwnertoSharers;
+//    c_clearOwner; 
+//    i_popIncomingRequestQueue;
+//  }
 
-  }
-  
-  transition (S, GETS, SS_D) {
-    //send data to req, add req to sharers
+//  transition (M, GETM, M) {
+//    //send Fwd-GetM to Owner, set owner to req
+//    f_forwardRequest;
+//    c_clearOwner;
+//    e_ownerIsRequestor;
+//    i_popIncomingRequestQueue; 
+//  }
+
+//  transition (M, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, M) {
+//    //send Put-Ack to req
+//    a_sendWriteBackAck;
+//    i_popIncomingRequestQueue;
+//
+//  }
+
+  transition (M, PUTM_Owner, MI_A) {
+    //copy data to memory, clear owner, send put-ack to Req
     vv_allocateTBEFromRequestNet;
-    qf_queueMemoryFetchRequest;
+    lq_queueMemoryWBRequest;
+    pl_writeDataToDirectory;
+    c_clearOwner;
+    //a_sendWriteBackAck;
     i_popIncomingRequestQueue;
   }
 
-  transition(SS_D, {GETS, GETM, PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, SS_D){
-    z_stall;  
-   } 
+ // transition(MI_A, {GETM, GETS}, MI_A){
+ //   z_stall;
+ // }
   
-  transition(SS_D, Memory_Data, S){
-    //add requestor to sharers, send data to requestor    
-     ars1_addRequestorToSharers;
-     d_sendData;
-     w_deallocateTBE;
-     qm_popMemQueue;
-
-  }
- 
-  
-  transition (S, GETM, SM_D) {
-    //send data to req, send inv to sharers, clear sharers, set owner to req   
-    
-    vv_allocateTBEFromRequestNet;
-    qf_queueMemoryFetchRequest;
-    i_popIncomingRequestQueue;
-     
+  transition(MI_A, Memory_Ack, I){
+    la_sendWriteBackAck;
+    w_deallocateTBE;    
+    qm_popMemQueue;
   }
 
-  transition(SM_D, {GETS, GETM, PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, SM_D){
-    z_stall;
+//  transition (S_D, {GETS, GETM}, S_D) {
+//    //stall
+//    z_stall;
+//  }
+//
+//  transition (S_D, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, S_D) {
+//    //remove req from sharers, send put-ack to req
+//    kk_removeRequestSharer;
+//    a_sendWriteBackAck;
+//    i_popIncomingRequestQueue;
+//  }
+//
+//  transition (S_D, Data, S_A) {
+//    //copy data to memory
+//    lq2_queueMemoryWBRequest;
+//    pl2_writeDataToDirectory;
+//    pr_popIncomingResponseQueue;
+//  }
+//  
+//  transition(S_A, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, S_A){
+//    z_stall;
+//  }
+//
+//  transition(S_A, Memory_Ack, S){
+//    ars2_addRequestorToSharers;  
+//    la_sendWriteBackAck;
+//    w_deallocateTBE;    
+//    qm_popMemQueue;
+//  }
 
-   }
-
-   transition(SM_D, Memory_Data, M){
-    e_ownerIsRequestor;
-
-
-
-   }
-
-
-  transition (S, {PUTS_NotLast, PUTM_NotOwner}, S) {
-    //remove req from sharers, send 
-  }    
 }
+
