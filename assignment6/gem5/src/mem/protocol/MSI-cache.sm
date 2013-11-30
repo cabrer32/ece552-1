@@ -287,7 +287,7 @@ machine(L1Cache, "MSI L1 Cache")
 
         if (in_msg.Type == CoherenceResponseType:DATA_FROM_DIR) {
 	  if (in_msg.AckCount == 0) {
-            DPRINTF(RubySlicc, "L1 - responseNetwork_in port: DATA_FROM_DIR_NO_ACKS reply for address %s\n", in_msg.Address);
+            DPRINTF(RubySlicc, "JZ!! L1 - responseNetwork_in port: DATA_FROM_DIR_NO_ACKS reply for address %s data %s\n", in_msg.Address, in_msg.DataBlk);
             trigger(Event:Data_from_Dir_No_Acks, in_msg.Address, cache_entry, tbe);
 	  } else {
             if ( (getPendingAcks(tbe) - in_msg.AckCount) == 0 ) {
@@ -619,7 +619,7 @@ machine(L1Cache, "MSI L1 Cache")
   //  //=================================================================================================================
   //  //ECE552: L1 Events triggered from the local processor explicitly (i.e., memory request) or implicitly (replacement)
   //  //=================================================================================================================
-  //  Load,       desc="Load request from processor";
+  //  Load       desc="Load request from processor";
   //  Ifetch,     desc="Ifetch request from processor";
   //  Store,      desc="Store request from processor";
 
@@ -644,14 +644,14 @@ machine(L1Cache, "MSI L1 Cache")
 
   //}
   
-//  transition(I, Load, IS_D){
-//    //send GetS to Dir
-//    v_allocateTBE;
-//    i_allocateL1CacheBlock;
-//    as_issueGetS;
-//    p_profileMiss;
-//    m_popMandatoryQueue;
-//  }
+  transition(I, {Load, Ifetch}, IS_D){
+    //send GetS to Dir
+    v_allocateTBE;
+    i_allocateL1CacheBlock;
+    p_profileMiss;
+    as_issueGetS;
+    m_popMandatoryQueue;
+  }
   
   transition(I, Store, IM_AD){
     //send GetM to Dir
@@ -662,20 +662,20 @@ machine(L1Cache, "MSI L1 Cache")
     m_popMandatoryQueue;
   }
   
-//  transition(IS_D, {Load, Store, Replacement, Inv},IS_D){
-//    //stall  
-//    z_stall;
-//   }  
-//  
-//  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S){
-//    //go to shared
-//    u_writeDataToCache;
-//    rx_load_hit;
-//    w_deallocateTBE;
-//    n_popResponseQueue;
-//   }  
-//  
-  transition(IM_AD, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_AD){
+  transition(IS_D, {Load, Ifetch, Store, Replacement, Inv},IS_D){
+    //stall  
+    z_stall;
+   }  
+  
+  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S){
+    //go to shared
+    u_writeDataToCache;
+    rx_load_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+   }  
+  
+  transition(IM_AD, {Load,Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_AD){
     //stall  
     z_stall;
    }  
@@ -685,136 +685,136 @@ machine(L1Cache, "MSI L1 Cache")
     u_writeDataToCache;
     sx_store_hit;
     w_deallocateTBE;
+//    m_popMandatoryQueue;
     n_popResponseQueue;
    }
   
-//  transition(IM_AD,{Data_from_Dir_Ack_Cnt,Data_from_Dir_Ack_Cnt_Last}, IM_A){
-//    //go to IM_A  
-//    u_writeDataToCache;
-//    q_updateAckCount;
-//    n_popResponseQueue;
-//      
-//  } 
-//  
-//  transition(IM_AD, Inv_Ack, IM_AD){
-//     //acks --
-//     q_updateAckCount;
-//     n_popResponseQueue;
-//
-//  }
-//
-//  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A){
-//     //stall
-//    z_stall;
-//  }
-//  transition(IM_A, Inv_Ack, IM_A){
-//     //acks --
-//     q_updateAckCount;
-//     n_popResponseQueue;
-//  }
-//
-//  transition(IM_A, Inv_Ack_all, M){
-//     //go to modified
-//    sx_store_hit;
-//    w_deallocateTBE;
-//    n_popResponseQueue;
-//
-//  }
-//  transition(S, Load, S){
-//     //hit
-//     r_load_hit;
-//     m_popMandatoryQueue;
-//  }
-//  
-//  transition(S, Store, SM_AD){
-//     //send GETM to dir
-//    v_allocateTBE;
-//    am_issueGetM;
-//    p_profileMiss;
-//    m_popMandatoryQueue;
-//     
-//
-//  }
-//  
-//  transition(S, Replacement, SI_A){
-//     //send PUTS to dir
-//    v_allocateTBE;
-//    bs_issuePUTS;
-//    m_popMandatoryQueue;
-//
-//  }
-//
-//  transition(S, Inv, I){
-//     //send Inv-Ack to Requestor
-//     h_deallocateL1CacheBlock;
-//     forward_eviction_to_cpu;
-//     fi_sendInvAck;
-//     o_popForwardedRequestQueue;
-//
-//  }
-//
-//  transition(SM_AD, Load, SM_AD){
-//     //hit
-//     r_load_hit;
-//     m_popMandatoryQueue;
-//  }
-//
-//  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
-//     //stall
-//    z_stall;
-//  }
-//
-//  transition(SM_AD, Inv, IM_AD){
-//     //send Inv-Ack to Requestor
-//     fi_sendInvAck;
-//     o_popForwardedRequestQueue;
-//
-//  }
-//
-//  transition(SM_AD, {Data_from_Dir_Ack_Cnt, Data_from_Dir_Ack_Cnt_Last},  SM_A){
-//     //go to SM_A
-//     u_writeDataToCache;
-//     q_updateAckCount;
-//     n_popResponseQueue;
-//  }
-//  
-//  transition(SM_AD, Inv_Ack, SM_AD){
-//     //acks --
-//     q_updateAckCount;
-//     n_popResponseQueue;
-//
-//  }
-//
-//  transition(SM_A, Load, SM_A){
-//     //hit
-//     r_load_hit;
-//     m_popMandatoryQueue;
-//  
-//  }
-//
-//  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
-//     //stall
-//    z_stall;
-//  }
-//  
-//  transition(SM_A, Inv_Ack, SM_A){
-//     //acks --
-//     q_updateAckCount;
-//     n_popResponseQueue;
-//  }
-//  
-//  transition(SM_A, Inv_Ack_all, M){
-//     //go to modified
-//    sx_store_hit;
-//    w_deallocateTBE;
-//    n_popResponseQueue;
-//  }
-//  
-//  transition(M, Load,  M){
-//     //hit
-//     r_load_hit;
-//     m_popMandatoryQueue;
-//  }
+  transition(IM_AD,{Data_from_Dir_Ack_Cnt,Data_from_Dir_Ack_Cnt_Last}, IM_A){
+    //go to IM_A  
+    u_writeDataToCache;
+    q_updateAckCount;
+    n_popResponseQueue;
+      
+  } 
+  
+  transition(IM_AD, Inv_Ack, IM_AD){
+     //acks --
+     q_updateAckCount;
+     n_popResponseQueue;
+
+  }
+
+  transition(IM_A, {Load,Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A){
+     //stall
+    z_stall;
+  }
+  transition(IM_A, Inv_Ack, IM_A){
+     //acks --
+     q_updateAckCount;
+     n_popResponseQueue;
+  }
+
+  transition(IM_A, Inv_Ack_all, M){
+     //go to modified
+    sx_store_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+
+  }
+  transition(S, {Load,Ifetch} , S){
+     //hit
+     r_load_hit;
+     m_popMandatoryQueue;
+  }
+  
+  transition(S, Store, SM_AD){
+     //send GETM to dir
+    v_allocateTBE;
+    am_issueGetM;
+    p_profileMiss;
+    m_popMandatoryQueue;
+     
+
+  }
+  
+  transition(S, Replacement, SI_A){
+     //send PUTS to dir
+    v_allocateTBE;
+    bs_issuePUTS;
+
+  }
+
+  transition(S, Inv, I){
+     //send Inv-Ack to Requestor
+     h_deallocateL1CacheBlock;
+     forward_eviction_to_cpu;
+     fi_sendInvAck;
+     o_popForwardedRequestQueue;
+
+  }
+
+  transition(SM_AD, {Load,Ifetch} , SM_AD){
+     //hit
+     r_load_hit;
+     m_popMandatoryQueue;
+  }
+
+  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
+     //stall
+    z_stall;
+  }
+
+  transition(SM_AD, Inv, IM_AD){
+     //send Inv-Ack to Requestor
+     fi_sendInvAck;
+     o_popForwardedRequestQueue;
+
+  }
+
+  transition(SM_AD, {Data_from_Dir_Ack_Cnt, Data_from_Dir_Ack_Cnt_Last},  SM_A){
+     //go to SM_A
+     u_writeDataToCache;
+     q_updateAckCount;
+     n_popResponseQueue;
+  }
+  
+  transition(SM_AD, Inv_Ack, SM_AD){
+     //acks --
+     q_updateAckCount;
+     n_popResponseQueue;
+
+  }
+
+  transition(SM_A, {Load,Ifetch} , SM_A){
+     //hit
+     r_load_hit;
+     m_popMandatoryQueue;
+  
+  }
+
+  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
+     //stall
+    z_stall;
+  }
+  
+  transition(SM_A, Inv_Ack, SM_A){
+     //acks --
+     q_updateAckCount;
+     n_popResponseQueue;
+  }
+  
+  transition(SM_A, Inv_Ack_all, M){
+     //go to modified
+    sx_store_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+  }
+  
+  transition(M, {Load,Ifetch} ,  M){
+     //hit
+     r_load_hit;
+     m_popMandatoryQueue;
+  }
 
   transition(M, Store,  M){
      //hit
@@ -827,69 +827,69 @@ machine(L1Cache, "MSI L1 Cache")
     v_allocateTBE;
     bm_issuePUTM;
     x_copyDataFromCacheToTBE;
-    m_popMandatoryQueue;
   }
 
 
-//  transition(M, Fwd_GetS,  S){
-//     //send Data to Requestor and Dir
-//     e_sendDataFromCacheToRequestor;
-//     de_sendDataFromCacheToDir;
-//     o_popForwardedRequestQueue; 
-//
-//  }
-//
-//  transition(M, Fwd_GetM,  I){
-//     //send Data to Requestor 
-//     e_sendDataFromCacheToRequestor;
-//     h_deallocateL1CacheBlock;
-//     forward_eviction_to_cpu;
-//     o_popForwardedRequestQueue; 
-//  }
-//
-//
-  transition(MI_A, {Load, Store, Replacement},  MI_A){
+  transition(M, Fwd_GetS,  S){
+     //send Data to Requestor and Dir
+     e_sendDataFromCacheToRequestor;
+     de_sendDataFromCacheToDir;
+     o_popForwardedRequestQueue; 
+
+  }
+
+  transition(M, Fwd_GetM,  I){
+     //send Data to Requestor 
+     e_sendDataFromCacheToRequestor;
+     h_deallocateL1CacheBlock;
+     forward_eviction_to_cpu;
+     o_popForwardedRequestQueue; 
+  }
+
+
+  transition(MI_A, {Load,Ifetch, Store, Replacement},  MI_A){
      //stall 
     z_stall;
   }
 
-//  transition(MI_A, Fwd_GetS,  SI_A){
-//     //send Data to Requestor and Dir
-//     ee_sendDataFromTBEToRequestor;
-//     dee_sendDataFromTBEToDir;
-//     o_popForwardedRequestQueue; 
-//  }
-//
-//  transition(MI_A, Fwd_GetM,  II_A){
-//     //send Data to Requestor
-//     ee_sendDataFromTBEToRequestor;
-//     o_popForwardedRequestQueue; 
-//  }
-//
-//
-//  transition(SI_A, {Load, Store, Replacement},  SI_A){
-//     //stall 
-//    z_stall;
-//  }
-//
-//
-//  transition(SI_A, Inv, II_A){
-//     //send Inv-Ack to Requestor
-//     fi_sendInvAck;
-//     o_popForwardedRequestQueue;
-//  }
+  transition(MI_A, Fwd_GetS,  SI_A){
+     //send Data to Requestor and Dir
+     ee_sendDataFromTBEToRequestor;
+     dee_sendDataFromTBEToDir;
+     o_popForwardedRequestQueue; 
+  }
+
+  transition(MI_A, Fwd_GetM,  II_A){
+     //send Data to Requestor
+     ee_sendDataFromTBEToRequestor;
+     o_popForwardedRequestQueue; 
+  }
+
+
+  transition(SI_A, {Load,Ifetch, Store, Replacement},  SI_A){
+     //stall 
+    z_stall;
+  }
+
+
+  transition(SI_A, Inv, II_A){
+     //send Inv-Ack to Requestor
+     fi_sendInvAck;
+     o_popForwardedRequestQueue;
+  }
 
   transition({MI_A,SI_A, II_A}, WB_Ack,  I){
      //go to invalidate
     h_deallocateL1CacheBlock;
     forward_eviction_to_cpu;
     w_deallocateTBE;
+//    m_popMandatoryQueue;
     o_popForwardedRequestQueue;
   }
   
-//  transition(II_A, {Load, Store, Replacement},  II_A){
-//     //stall 
-//    z_stall;
-//  }
+  transition(II_A, {Load,Ifetch, Store, Replacement},  II_A){
+     //stall 
+    z_stall;
+  }
 
 }

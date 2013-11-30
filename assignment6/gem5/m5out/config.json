@@ -64,16 +64,14 @@
         "work_end_ckpt_count": 0, 
         "work_begin_ckpt_count": 0, 
         "work_end_exit_count": 0, 
-        "system_port": {
-            "peer": "system.sys_port_proxy.slave[0]", 
-            "role": "MASTER"
-        }, 
+        "type": "System", 
         "tester": {
             "name": "tester", 
-            "num_cpus": 1, 
+            "num_cpus": 2, 
             "cpuDataPort": {
                 "peer": [
-                    "system.l1_cntrl0.sequencer.slave[0]"
+                    "system.l1_cntrl0.sequencer.slave[0]", 
+                    "system.l1_cntrl1.sequencer.slave[0]"
                 ], 
                 "role": "MASTER"
             }, 
@@ -84,7 +82,8 @@
             "path": "system.tester", 
             "cpuInstPort": {
                 "peer": [
-                    "system.l1_cntrl0.sequencer.slave[1]"
+                    "system.l1_cntrl0.sequencer.slave[1]", 
+                    "system.l1_cntrl1.sequencer.slave[1]"
                 ], 
                 "role": "MASTER"
             }, 
@@ -123,7 +122,7 @@
                 "name": "profiler", 
                 "hot_lines": false, 
                 "all_instructions": false, 
-                "num_of_sequencers": 1, 
+                "num_of_sequencers": 2, 
                 "cxx_class": "Profiler", 
                 "path": "system.ruby.profiler", 
                 "type": "RubyProfiler"
@@ -150,7 +149,7 @@
                             "latency": 1, 
                             "name": "int_links0", 
                             "weight": 1, 
-                            "link_id": 2, 
+                            "link_id": 3, 
                             "cxx_class": "SimpleIntLink", 
                             "path": "system.ruby.network.topology.int_links0", 
                             "type": "SimpleIntLink", 
@@ -160,9 +159,19 @@
                             "latency": 1, 
                             "name": "int_links1", 
                             "weight": 1, 
-                            "link_id": 3, 
+                            "link_id": 4, 
                             "cxx_class": "SimpleIntLink", 
                             "path": "system.ruby.network.topology.int_links1", 
+                            "type": "SimpleIntLink", 
+                            "bandwidth_factor": 16
+                        }, 
+                        {
+                            "latency": 1, 
+                            "name": "int_links2", 
+                            "weight": 1, 
+                            "link_id": 5, 
+                            "cxx_class": "SimpleIntLink", 
+                            "path": "system.ruby.network.topology.int_links2", 
                             "type": "SimpleIntLink", 
                             "bandwidth_factor": 16
                         }
@@ -188,6 +197,13 @@
                             "type": "BasicRouter", 
                             "name": "routers2", 
                             "cxx_class": "BasicRouter"
+                        }, 
+                        {
+                            "router_id": 3, 
+                            "path": "system.ruby.network.topology.routers3", 
+                            "type": "BasicRouter", 
+                            "name": "routers3", 
+                            "cxx_class": "BasicRouter"
                         }
                     ], 
                     "ext_links": [
@@ -210,6 +226,16 @@
                             "path": "system.ruby.network.topology.ext_links1", 
                             "type": "SimpleExtLink", 
                             "bandwidth_factor": 16
+                        }, 
+                        {
+                            "latency": 1, 
+                            "name": "ext_links2", 
+                            "weight": 1, 
+                            "link_id": 2, 
+                            "cxx_class": "SimpleExtLink", 
+                            "path": "system.ruby.network.topology.ext_links2", 
+                            "type": "SimpleExtLink", 
+                            "bandwidth_factor": 16
                         }
                     ], 
                     "cxx_class": "Topology", 
@@ -219,15 +245,65 @@
                 }
             }
         }, 
+        "l1_cntrl1": {
+            "cacheMemory": {
+                "latency": 3, 
+                "is_icache": false, 
+                "name": "cacheMemory", 
+                "assoc": 2, 
+                "start_index_bit": 6, 
+                "cxx_class": "CacheMemory", 
+                "path": "system.l1_cntrl1.cacheMemory", 
+                "type": "RubyCache", 
+                "size": 256
+            }, 
+            "cntrl_id": 1, 
+            "recycle_latency": 10, 
+            "name": "l1_cntrl1", 
+            "number_of_TBEs": 256, 
+            "transitions_per_cycle": 32, 
+            "cxx_class": "L1Cache_Controller", 
+            "cache_response_latency": 12, 
+            "version": 1, 
+            "sequencer": {
+                "access_phys_mem": false, 
+                "support_inst_reqs": true, 
+                "slave": {
+                    "peer": [
+                        "system.tester.cpuDataPort[1]", 
+                        "system.tester.cpuInstPort[1]"
+                    ], 
+                    "role": "SLAVE"
+                }, 
+                "name": "sequencer", 
+                "max_outstanding_requests": 16, 
+                "support_data_reqs": true, 
+                "deadlock_threshold": 500000, 
+                "using_ruby_tester": true, 
+                "version": 1, 
+                "cxx_class": "Sequencer", 
+                "path": "system.l1_cntrl1.sequencer", 
+                "using_network_tester": false, 
+                "type": "RubySequencer"
+            }, 
+            "buffer_size": 0, 
+            "path": "system.l1_cntrl1", 
+            "send_evictions": false, 
+            "type": "L1Cache_Controller", 
+            "issue_latency": 2
+        }, 
         "mem_mode": "timing", 
         "name": "system", 
         "init_param": 0, 
-        "type": "System", 
+        "system_port": {
+            "peer": "system.sys_port_proxy.slave[0]", 
+            "role": "MASTER"
+        }, 
         "load_addr_mask": 1099511627775, 
         "work_begin_cpu_id_exit": -1, 
         "work_item_id": -1, 
         "dir_cntrl0": {
-            "cntrl_id": 1, 
+            "cntrl_id": 2, 
             "recycle_latency": 10, 
             "memBuffer": {
                 "basic_bus_busy_time": 2, 
