@@ -281,8 +281,15 @@ machine(Directory, "Directory protocol")
  
   action(kk_removeRequestSharer, "\k", desc="Remove Request sharer from list") {
     peek(requestQueue_in, RequestMsg) {
+      APPEND_TRANSITION_COMMENT("Own: ");
+      APPEND_TRANSITION_COMMENT(getDirectoryEntry(in_msg.Address).Owner);
+      APPEND_TRANSITION_COMMENT("Sharers b4: ");
+      APPEND_TRANSITION_COMMENT(getDirectoryEntry(in_msg.Address).Sharers);
       DPRINTF(RubySlicc, "remove request from sharers...");
       getDirectoryEntry(address).Sharers.remove(in_msg.Requestor);
+      
+      APPEND_TRANSITION_COMMENT("Sharers after: ");
+      APPEND_TRANSITION_COMMENT(getDirectoryEntry(in_msg.Address).Sharers);
     }
   }
 
@@ -328,7 +335,7 @@ machine(Directory, "Directory protocol")
         out_msg.Requestor := in_msg.OriginalRequestorMachId;
         out_msg.Destination.add(in_msg.OriginalRequestorMachId);
         out_msg.MessageSize := MessageSizeType:Writeback_Control;
-	DPRINTF(RubySlicc, "Directory - forwardNetwork_out: WB_ACK after Memory Ack for address %s  to machine %s\n", out_msg.Address, in_msg.OriginalRequestorMachId);
+	DPRINTF(RubySlicc, "LAPRINTING Directory - forwardNetwork_out: WB_ACK after Memory Ack for address %s  to machine %s\n", out_msg.Address, in_msg.OriginalRequestorMachId);
       }
     }
   }
@@ -600,7 +607,6 @@ getDirectoryEntry(address).Sharers);
     //set requestor to owner, send data to requestor    
     d_sendData;
     w_deallocateTBE;
-//    i_popIncomingRequestQueue;
     qm_popMemQueue;
   } 
  
@@ -642,7 +648,8 @@ getDirectoryEntry(address).Sharers);
 
   transition (S, PUTS_Last, I) {
     //remove req from sharers, send put-ack to requestor
-    kk_removeRequestSharer;
+    //kk_removeRequestSharer;
+    cs_clearSharers;
     a_sendWriteBackAck;
     i_popIncomingRequestQueue;
   }
@@ -657,6 +664,7 @@ getDirectoryEntry(address).Sharers);
     i_popIncomingRequestQueue;
   }
 
+  
   transition (M, GETM, M) {
     //send Fwd-GetM to Owner, set owner to req
     f_forwardRequest;
@@ -664,7 +672,23 @@ getDirectoryEntry(address).Sharers);
     e_ownerIsRequestor;
     i_popIncomingRequestQueue; 
   }
+  
+  transition (MI_A, {GETM,GETS, PUTM_Owner, PUTM_NotOwner, PUTS_NotLast, PUTS_Last}, MI_A) {
+    //send Fwd-GetM to Owner, set owner to req
+//    f_forwardRequest;
+//    c_clearOwner;
+//    e_ownerIsRequestor;
+//    i_popIncomingRequestQueue; 
+     z_stall;
+  }
+  
+  transition(M, Memory_Ack, M){
+    la_sendWriteBackAck;
+    qm_popMemQueue;
 
+  }
+
+  
   transition (M, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, M) {
     //send Put-Ack to req
     a_sendWriteBackAck;
@@ -681,14 +705,12 @@ getDirectoryEntry(address).Sharers);
     i_popIncomingRequestQueue;
   }
 
-  transition(MI_A, {GETM, GETS, PUTM_NotOwner}, MI_A){
-    z_stall;
-  }
+
+
   
   transition(MI_A, Memory_Ack, I){
     la_sendWriteBackAck;
     w_deallocateTBE;    
-//    i_popIncomingRequestQueue;
     qm_popMemQueue;
   }
 
@@ -711,13 +733,13 @@ getDirectoryEntry(address).Sharers);
     pr_popIncomingResponseQueue;
   }
   
-  transition(S_A, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, S_A){
+  transition(S_A, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner, GETM, GETS}, S_A){
     z_stall;
   }
 
   transition(S_A, Memory_Ack, S){
-    ars2_addRequestorToSharers;  
-    la_sendWriteBackAck;
+    //la_sendWriteBackAck;
+//    ars1_addRequestorToSharers;  
     w_deallocateTBE;    
     qm_popMemQueue;
   }

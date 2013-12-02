@@ -252,7 +252,7 @@ machine(L1Cache, "MSI L1 Cache")
         TBE tbe := TBEs[in_msg.Address];
 
         if (in_msg.Type == CoherenceRequestType:GETM) {
-          DPRINTF(RubySlicc, "L1 - forwardRequestNetwork_in port: GETM request for address %s\n", in_msg.Address);
+          DPRINTF(RubySlicc, "LOOK AT ME L1 - forwardRequestNetwork_in port: GETM request for address %s\n", in_msg.Address);
           trigger(Event:Fwd_GetM, in_msg.Address, cache_entry, tbe);
         }
 	else if (in_msg.Type == CoherenceRequestType:GETS) {
@@ -685,11 +685,10 @@ machine(L1Cache, "MSI L1 Cache")
     u_writeDataToCache;
     sx_store_hit;
     w_deallocateTBE;
-//    m_popMandatoryQueue;
     n_popResponseQueue;
    }
   
-  transition(IM_AD,{Data_from_Dir_Ack_Cnt,Data_from_Dir_Ack_Cnt_Last}, IM_A){
+  transition(IM_AD,Data_from_Dir_Ack_Cnt, IM_A){
     //go to IM_A  
     u_writeDataToCache;
     q_updateAckCount;
@@ -697,6 +696,15 @@ machine(L1Cache, "MSI L1 Cache")
       
   } 
   
+  transition(IM_AD, Data_from_Dir_Ack_Cnt_Last, M){
+    u_writeDataToCache;
+    sx_store_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+
+
+  }
+
   transition(IM_AD, Inv_Ack, IM_AD){
      //acks --
      q_updateAckCount;
@@ -771,13 +779,23 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
-  transition(SM_AD, {Data_from_Dir_Ack_Cnt, Data_from_Dir_Ack_Cnt_Last},  SM_A){
+  transition(SM_AD, Data_from_Dir_Ack_Cnt ,  SM_A){
      //go to SM_A
      u_writeDataToCache;
      q_updateAckCount;
      n_popResponseQueue;
   }
-  
+ 
+ 
+  transition(SM_AD, {Data_from_Dir_Ack_Cnt_Last, Data_from_Dir_No_Acks, Data_from_Owner},  M){
+ 
+    u_writeDataToCache;
+    sx_store_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+ 
+   } 
+
   transition(SM_AD, Inv_Ack, SM_AD){
      //acks --
      q_updateAckCount;
@@ -825,8 +843,8 @@ machine(L1Cache, "MSI L1 Cache")
   transition(M, Replacement,  MI_A){
      //send PUTM and Data to dir
     v_allocateTBE;
-    bm_issuePUTM;
     x_copyDataFromCacheToTBE;
+    bm_issuePUTM;
   }
 
 
@@ -883,7 +901,6 @@ machine(L1Cache, "MSI L1 Cache")
     h_deallocateL1CacheBlock;
     forward_eviction_to_cpu;
     w_deallocateTBE;
-//    m_popMandatoryQueue;
     o_popForwardedRequestQueue;
   }
   
