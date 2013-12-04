@@ -48,8 +48,8 @@ machine(Directory, "Directory protocol")
     //ECE552: Transient States
     //========================
     
-    S_D, AccessPermission:Busy, desc="Waiting for Data from owner who is relinquishing ownership and changing to S";
-    S_A, AccessPermission:Busy, desc="Waiting for Ack from memory before changing to S";
+    MS_D, AccessPermission:Busy, desc="Waiting for Data from owner who is relinquishing ownership and changing to S";
+    MS_A, AccessPermission:Busy, desc="Waiting for Ack from memory before changing to S";
     MI_A, AccessPermission:Busy, desc="Waiting for Ack from memory before changing to I";
     IM_D, AccessPermission:Busy, desc="Waiting for data from memory before changing to M";
     IS_D, AccessPermission:Busy, desc="Waiting for data from memory before changing to S";
@@ -283,13 +283,11 @@ machine(Directory, "Directory protocol")
     peek(requestQueue_in, RequestMsg) {
       APPEND_TRANSITION_COMMENT("Own: ");
       APPEND_TRANSITION_COMMENT(getDirectoryEntry(in_msg.Address).Owner);
-      APPEND_TRANSITION_COMMENT("Sharers b4: ");
+      APPEND_TRANSITION_COMMENT("Sharers: ");
       APPEND_TRANSITION_COMMENT(getDirectoryEntry(in_msg.Address).Sharers);
       DPRINTF(RubySlicc, "remove request from sharers...");
       getDirectoryEntry(address).Sharers.remove(in_msg.Requestor);
       
-      APPEND_TRANSITION_COMMENT("Sharers after: ");
-      APPEND_TRANSITION_COMMENT(getDirectoryEntry(in_msg.Address).Sharers);
     }
   }
 
@@ -357,7 +355,7 @@ machine(Directory, "Directory protocol")
         out_msg.Destination.add(in_msg.OriginalRequestorMachId);
         out_msg.DataBlk := in_msg.DataBlk;
         out_msg.MessageSize := MessageSizeType:Response_Data;
-	DPRINTF(RubySlicc, "NAIF !!!!! the data being sent from dir %s and address %s\n", out_msg.DataBlk, out_msg.Address );
+	DPRINTF(RubySlicc, "the data being sent from dir %s and address %s\n", out_msg.DataBlk, out_msg.Address );
 	out_msg.AckCount := 0;
       }
     }
@@ -497,7 +495,7 @@ getDirectoryEntry(address).Sharers);
         out_msg.OriginalRequestorMachId := in_msg.Requestor;
         out_msg.DataBlk := in_msg.DataBlk;
         out_msg.MessageSize := in_msg.MessageSize;
-	DPRINTF(RubySlicc, "JORDAN!! Directory - memQueue_out: send MEMORY_WB request for address %s triggered from machine %s  data is: %s\n", out_msg.Address, in_msg.Requestor, out_msg.DataBlk);
+	DPRINTF(RubySlicc, "Directory - memQueue_out: send MEMORY_WB request for address %s triggered from machine %s  data is: %s\n", out_msg.Address, in_msg.Requestor, out_msg.DataBlk);
       }
     }
   }
@@ -571,6 +569,9 @@ getDirectoryEntry(address).Sharers);
 
   /* ECE552: Complete this section here */
 
+
+  //cache line invalid, a cache wants a shared copy
+  //fetch data from memory, wait for data
   transition (I, GETS, IS_D) {
     //fetch data from memory
     vv_allocateTBEFromRequestNet;
@@ -579,10 +580,17 @@ getDirectoryEntry(address).Sharers);
 
   }    
   
-  transition(IS_D, {GETS, GETM}, IS_D){
+  //cache line in transient state between invalid and shared
+  //waiting for data from memory to send back
+  //stall otherwise
+  transition(IS_D, {GETS, GETM, PUTM_NotOwner}, IS_D){
     z_stall;
   }
   
+
+  //cache line in transient state between invalid and shared
+  //received data and now sends data to the requesting cache
+  //adds the requesting processor to the sharers list
   transition(IS_D, Memory_Data, S){
     //add to sharers once data is received    
     d_sendData;
@@ -590,7 +598,10 @@ getDirectoryEntry(address).Sharers);
     w_deallocateTBE;
     qm_popMemQueue;
   } 
-  
+ 
+  //cache line invalid, a cache wants a modified copy
+  //fetch data from memory, wait for data 
+  //sets the requestor as the owner
   transition (I, GETM, IM_D) {
     //send data to requestor, add requestor as owner
     vv_allocateTBEFromRequestNet;
@@ -599,30 +610,44 @@ getDirectoryEntry(address).Sharers);
     i_popIncomingRequestQueue;
   }    
 
-  transition(IM_D, {GETM, GETS},  IM_D){
+  //cache line in transient state between invalid and modified
+  //waiting for data from memory to send back
+  //stall otherwise
+  transition(IM_D, {GETM, GETS, PUTM_NotOwner},  IM_D){
     z_stall;
   }
   
+  //cache line in transient state between invalid and modified
+  //received data and now sends data to the requesting cache
   transition(IM_D, Memory_Data, M){
-    //set requestor to owner, send data to requestor    
+    //send data to requestor    
     d_sendData;
     w_deallocateTBE;
     qm_popMemQueue;
   } 
- 
+
+
+  //cache line is already invalid but receives PUT requests
+  //return with write back acknowedgments 
   transition (I, {PUTS_Last, PUTS_NotLast, PUTM_NotOwner}, I) {
     //send Put-Ack to requestor
     a_sendWriteBackAck;
     i_popIncomingRequestQueue;
   }
 
+  //cache line in shared, another cache wants a shared copy
+  //send shared data to requestor and add requestor to sharers list
   transition (S, GETS, S) {
     //send data to req, add req to sharers   
     ds_sendSharedData;
     ars2_addRequestorToSharers;
     i_popIncomingRequestQueue;
   }
-  
+ 
+ 
+  //cache line in shared, another cache wants a modified copy
+  //send data to requestor, invalidate all the sharers as requestor wants exclusive copy
+  //clear the sharers list and set the requestor as the current owner
   transition (S, GETM, M) {
     //send data to req, send inv to sharers, clear sharers, set owner to req   
     
@@ -638,6 +663,8 @@ getDirectoryEntry(address).Sharers);
 
 
 
+  //cache line in shared, one of the cache's is evicting a shared copy
+  //remove the cache from the sharers list and send the write back acknowledgment
   transition (S, {PUTS_NotLast, PUTM_NotOwner}, S) {
     //remove req from sharers, send PUT-Ack to Requstor
     kk_removeRequestSharer;
@@ -646,6 +673,8 @@ getDirectoryEntry(address).Sharers);
   }    
 
 
+  //cache line in shared, receives the last PUT from a cache
+  //no more sharesrs and can go to invalid
   transition (S, PUTS_Last, I) {
     //remove req from sharers, send put-ack to requestor
     //kk_removeRequestSharer;
@@ -654,7 +683,10 @@ getDirectoryEntry(address).Sharers);
     i_popIncomingRequestQueue;
   }
 
-  transition (M, GETS, S_D) {
+  //cache line in modified, receives a request of a shared copy
+  //needs to wait for data from the owner and then write that data to memory
+  //set the owner to be a sharer instead and clear the owners 
+  transition (M, GETS, MS_D) {
     //send Fwd-GetS to Owner, add req and owner to sharers, clear owners
     vv_allocateTBEFromRequestNet; 
     f_forwardRequest;
@@ -664,7 +696,8 @@ getDirectoryEntry(address).Sharers);
     i_popIncomingRequestQueue;
   }
 
-  
+  //cache line in modified, and someone else wants a modified copy
+  //change ownership to the new cache 
   transition (M, GETM, M) {
     //send Fwd-GetM to Owner, set owner to req
     f_forwardRequest;
@@ -672,23 +705,18 @@ getDirectoryEntry(address).Sharers);
     e_ownerIsRequestor;
     i_popIncomingRequestQueue; 
   }
-  
+ 
+  //cache line in transient state between modified and invalid, waiting for memory write back acknowledgment
+  //else stall  
   transition (MI_A, {GETM,GETS, PUTM_Owner, PUTM_NotOwner, PUTS_NotLast, PUTS_Last}, MI_A) {
-    //send Fwd-GetM to Owner, set owner to req
-//    f_forwardRequest;
-//    c_clearOwner;
-//    e_ownerIsRequestor;
-//    i_popIncomingRequestQueue; 
      z_stall;
   }
   
-  transition(M, Memory_Ack, M){
-    la_sendWriteBackAck;
-    qm_popMemQueue;
 
-  }
-
-  
+ 
+ 
+  //cache line in modified, receiving a request to evict shared copy
+  //just send back write back acknowedgments 
   transition (M, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, M) {
     //send Put-Ack to req
     a_sendWriteBackAck;
@@ -696,6 +724,9 @@ getDirectoryEntry(address).Sharers);
 
   }
 
+
+  //cache line in modified, receive request to evict modfied copy
+  //get ready to invalidate once memory writeback is complete (wait for the acknowledgment)
   transition (M, PUTM_Owner, MI_A) {
     //copy data to memory, clear owner, send put-ack to Req
     vv_allocateTBEFromRequestNet;
@@ -707,39 +738,49 @@ getDirectoryEntry(address).Sharers);
 
 
 
-  
+  //cache line in transient state between modfied and invalid, waiting for memory writeback acknowledgment
+  //receives writeback acknowledgment and now can go invalid  
   transition(MI_A, Memory_Ack, I){
     la_sendWriteBackAck;
     w_deallocateTBE;    
     qm_popMemQueue;
   }
 
-  transition (S_D, {GETS, GETM}, S_D) {
+  //cache line in transient state between modfied and shared, waiting for the data from the owner
+  //stall otherwise
+  transition (MS_D, {GETS, GETM}, MS_D) {
     //stall
     z_stall;
   }
 
-  transition (S_D, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, S_D) {
+
+  //cache line in transient state between modified and shared
+  //remove the requestor from sharers
+  transition (MS_D, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, MS_D) {
     //remove req from sharers, send put-ack to req
     kk_removeRequestSharer;
     a_sendWriteBackAck;
     i_popIncomingRequestQueue;
   }
 
-  transition (S_D, Data, S_A) {
+  //cache line in transient state between modified and shared
+  //receives data from owner now waiting for writeback acknowledgments after sending writeback request to mem
+  transition (MS_D, Data, MS_A) {
     //copy data to memory
     lq2_queueMemoryWBRequest;
     pl2_writeDataToDirectory;
     pr_popIncomingResponseQueue;
   }
   
-  transition(S_A, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner, GETM, GETS}, S_A){
+  //cache line in transient state between modified and shared, waiting for mem writeback acknowledgment
+  //stall otherwise
+  transition(MS_A, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner, GETM, GETS}, MS_A){
     z_stall;
   }
 
-  transition(S_A, Memory_Ack, S){
-    //la_sendWriteBackAck;
-//    ars1_addRequestorToSharers;  
+  //cache line in transient state between modified and shared, waiting for mem writeback acknowledgment
+  //receives writeback acknowledgment and now can transition to the shared state
+  transition(MS_A, Memory_Ack, S){
     w_deallocateTBE;    
     qm_popMemQueue;
   }

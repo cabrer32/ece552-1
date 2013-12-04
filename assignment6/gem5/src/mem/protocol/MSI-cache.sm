@@ -287,7 +287,7 @@ machine(L1Cache, "MSI L1 Cache")
 
         if (in_msg.Type == CoherenceResponseType:DATA_FROM_DIR) {
 	  if (in_msg.AckCount == 0) {
-            DPRINTF(RubySlicc, "JZ!! L1 - responseNetwork_in port: DATA_FROM_DIR_NO_ACKS reply for address %s data %s\n", in_msg.Address, in_msg.DataBlk);
+            DPRINTF(RubySlicc, "L1 - responseNetwork_in port: DATA_FROM_DIR_NO_ACKS reply for address %s data %s\n", in_msg.Address, in_msg.DataBlk);
             trigger(Event:Data_from_Dir_No_Acks, in_msg.Address, cache_entry, tbe);
 	  } else {
             if ( (getPendingAcks(tbe) - in_msg.AckCount) == 0 ) {
@@ -643,7 +643,13 @@ machine(L1Cache, "MSI L1 Cache")
   //  Data_from_Owner,		 desc="Data from remote L1 (remote Owner)";
 
   //}
-  
+
+
+
+  //Cache wants to issue a load or an IFETCH on an invalid cache line
+  //send a GetS signal to Dir
+  //Go to a transient state and then
+  //Wait for Dir to send back the data  
   transition(I, {Load, Ifetch}, IS_D){
     //send GetS to Dir
     v_allocateTBE;
@@ -653,6 +659,9 @@ machine(L1Cache, "MSI L1 Cache")
     m_popMandatoryQueue;
   }
   
+  //Cache wants to issue a store on an invalid cache line
+  //send a GetM to dir
+  //Wait for dir to send the rest of the cache line before we can do the store
   transition(I, Store, IM_AD){
     //send GetM to Dir
     v_allocateTBE;
@@ -662,11 +671,19 @@ machine(L1Cache, "MSI L1 Cache")
     m_popMandatoryQueue;
   }
   
+
+
+  //transient state between Invalid and shared state
+  //waiting for data, on anything else we are stalling
   transition(IS_D, {Load, Ifetch, Store, Replacement, Inv},IS_D){
     //stall  
     z_stall;
    }  
   
+
+  //transient state between Invalid and shared state
+  //received the data from the directory (on the response queue)
+  //now ready to go to shared state after writing the data to cache and recording the hit
   transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S){
     //go to shared
     u_writeDataToCache;
@@ -675,11 +692,16 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
    }  
   
+  //transient state between Invalid and shared state
+  //waiting for data, on anything else we are stalling
   transition(IM_AD, {Load,Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_AD){
     //stall  
     z_stall;
    }  
   
+  //transient state between Invalid and modified state
+  //received the data from the directory (on the response queue), with no more acknowledgements
+  //we can transition to modified directly as no other cache's have this block, after writing data to cache and recording the hit
   transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M){
      //go to modified 
     u_writeDataToCache;
@@ -688,6 +710,10 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
    }
   
+  //transient state between Invalid and modified state
+  //received the data from the directory (on the response queue), but there are still pending acknowlegements
+  //write the data to cache and update the acknowlegement count
+  //waiting for the rest of the acknowledgments (when all other caches have invalidated) before it is safe to transition to Modified
   transition(IM_AD,Data_from_Dir_Ack_Cnt, IM_A){
     //go to IM_A  
     u_writeDataToCache;
@@ -695,8 +721,13 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
       
   } 
-  
+ 
+ 
+  //transient state between invalid and modified
+  //received the data from the directory with the last of the acknowledgments
+  //write the data to cache, record the hit and transition to modified since no more acknowledgements left
   transition(IM_AD, Data_from_Dir_Ack_Cnt_Last, M){
+    //go to M
     u_writeDataToCache;
     sx_store_hit;
     w_deallocateTBE;
@@ -705,6 +736,10 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
+  //transient state between invalid and modified
+  //waiting for data from directory (after getm)
+  //received an invalidation from one of the caches (after invalidating), update the ackcount, and continue waiting
+  //for the data and rest of the acknowledgments  
   transition(IM_AD, Inv_Ack, IM_AD){
      //acks --
      q_updateAckCount;
@@ -712,16 +747,32 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
+
+  //transient state between invalid and modified
+  //waiting for the remaining acknowledgments, already received the data
+  //anything else stall
   transition(IM_A, {Load,Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A){
      //stall
     z_stall;
   }
+
+
+  //transient state between invalid and modified
+  //already received the data
+  //waiting for the rest of the acknowledgements
+  //received one of the acknowledgements and update the ack count
+  //continue to wait for the rest of the acknowledgements
   transition(IM_A, Inv_Ack, IM_A){
      //acks --
      q_updateAckCount;
      n_popResponseQueue;
   }
 
+
+  //transient state between invalid and modified
+  //already received the data
+  //receieved the last of the pending acknowledgements
+  //now can record the store hit and transition to modified
   transition(IM_A, Inv_Ack_all, M){
      //go to modified
     sx_store_hit;
@@ -729,22 +780,30 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
 
   }
+
+  //cache is already in shared, and a load is issued, hit!
   transition(S, {Load,Ifetch} , S){
      //hit
      r_load_hit;
      m_popMandatoryQueue;
   }
-  
+ 
+ 
+  //cache is in shared, and now cache wants to do a store (upgrade miss)
+  //send a getm to dir to request ownership of this block
+  //now have to wait for data from directory and acknowledgment that all the other caches invalidated (need exclusive copy) 
   transition(S, Store, SM_AD){
      //send GETM to dir
     v_allocateTBE;
     am_issueGetM;
     p_profileMiss;
     m_popMandatoryQueue;
-     
-
   }
-  
+ 
+ 
+ 
+  //cache is in shared and now about to be evicted
+  //issue a PUTS to directory (to remove from sharers list), and wait for acknowledgment for directory on writeback (after dir writes to memory) 
   transition(S, Replacement, SI_A){
      //send PUTS to dir
     v_allocateTBE;
@@ -752,6 +811,10 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
+    
+  //cache in shared, received invalidation request from directory (on a getm from another cache that wants exclusivity)
+  //can go straight to invalid as it is only a shared copy
+  //send directory an invalidation acknowledgment
   transition(S, Inv, I){
      //send Inv-Ack to Requestor
      h_deallocateL1CacheBlock;
@@ -761,17 +824,23 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
+  
+  //cache in transient state between shared and modified, recieved load and it can service load, hit!
   transition(SM_AD, {Load,Ifetch} , SM_AD){
      //hit
      r_load_hit;
      m_popMandatoryQueue;
   }
 
+  //cache in transient state between shared and modified, waiting for acknowledgement and data from dir, stall elsewise
   transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
      //stall
     z_stall;
   }
 
+
+  //cache in transient state between shared and modified, recieved an invalidation request
+  //send inv-ack and still wait for data and acks before going to modify yourself 
   transition(SM_AD, Inv, IM_AD){
      //send Inv-Ack to Requestor
      fi_sendInvAck;
@@ -779,6 +848,10 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
+
+  //cache in transient state between shared and modified, waiting for data and acknowledgments
+  //recieves data and now will only wait for the other caches to acknowledge their invalidations
+  //write the data that is received to the cache
   transition(SM_AD, Data_from_Dir_Ack_Cnt ,  SM_A){
      //go to SM_A
      u_writeDataToCache;
@@ -787,6 +860,10 @@ machine(L1Cache, "MSI L1 Cache")
   }
  
  
+
+  //cache in transient state between shared and modified, receivied the last data or data from owner
+  //we know there are no more acknowledgements so we can transition to modified directly
+  //copy the data to cache and record the hit
   transition(SM_AD, {Data_from_Dir_Ack_Cnt_Last, Data_from_Dir_No_Acks, Data_from_Owner},  M){
  
     u_writeDataToCache;
@@ -796,6 +873,9 @@ machine(L1Cache, "MSI L1 Cache")
  
    } 
 
+
+  //cache in transient state between shared and modified, waiting for data and acknowledgments
+  //one of the acknowledgements came in so we decrement the counter
   transition(SM_AD, Inv_Ack, SM_AD){
      //acks --
      q_updateAckCount;
@@ -803,6 +883,9 @@ machine(L1Cache, "MSI L1 Cache")
 
   }
 
+
+  //cache in transient state between shared and modified, already received data and waiting for acknowledgments
+  //still technically in shared state (not removed from sharers yet), can service loads and ifetches, hit!
   transition(SM_A, {Load,Ifetch} , SM_A){
      //hit
      r_load_hit;
@@ -810,17 +893,25 @@ machine(L1Cache, "MSI L1 Cache")
   
   }
 
+
+  //cache in transient state between shared and modified, received data, waiting for acknowledgments
+  //no acknowledgments,or load requests, stall
   transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
      //stall
     z_stall;
   }
   
+  //cache in transient state between shared and modified, received data and just received one of the acknowledgments
+  //decrement the acknowledgment counter
   transition(SM_A, Inv_Ack, SM_A){
      //acks --
      q_updateAckCount;
      n_popResponseQueue;
   }
   
+
+  //cache in transient state between shared and modified,received the data and now just received the last invalidation acknowledgment
+  //transition to modified
   transition(SM_A, Inv_Ack_all, M){
      //go to modified
     sx_store_hit;
@@ -828,18 +919,26 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
   }
   
+
+  //cache in modified, and load, ifetch issued
+  //hit!
   transition(M, {Load,Ifetch} ,  M){
      //hit
      r_load_hit;
      m_popMandatoryQueue;
   }
 
+  //cache in modified, and store issued
+  //hit!
   transition(M, Store,  M){
      //hit
      s_store_hit;
      m_popMandatoryQueue;
   }
 
+
+  //cache in modified, and replacement issued,
+  //wait for acknowledgment from dir(memory writeback acknowledgmnt)
   transition(M, Replacement,  MI_A){
      //send PUTM and Data to dir
     v_allocateTBE;
@@ -847,7 +946,8 @@ machine(L1Cache, "MSI L1 Cache")
     bm_issuePUTM;
   }
 
-
+  //cache in modified, someone else wants a shared copy
+  //send data over (to requestor and the directory) and transition to the shared state
   transition(M, Fwd_GetS,  S){
      //send Data to Requestor and Dir
      e_sendDataFromCacheToRequestor;
@@ -855,6 +955,9 @@ machine(L1Cache, "MSI L1 Cache")
      o_popForwardedRequestQueue; 
 
   }
+
+  //cache in modified, someone else wants a modified copy
+  //send data over to requestor (directory doesn't need it, as only one owner) and transition to invalid
 
   transition(M, Fwd_GetM,  I){
      //send Data to Requestor 
@@ -864,12 +967,17 @@ machine(L1Cache, "MSI L1 Cache")
      o_popForwardedRequestQueue; 
   }
 
-
+  //transient state between modified and invalid, waiting for writeback acknowledgment after M state was issued a replacement
+  //stalling if not acknowledgment or forward request(we still have the data until writeback is complete)
   transition(MI_A, {Load,Ifetch, Store, Replacement},  MI_A){
      //stall 
     z_stall;
   }
 
+  //transient state between modified and invalid, waiting for writeback acknowledgment
+  //someone else wants a shared copy, since we still have data we forward to data
+  //transition to SI_A state (have shared copy and waiting for WB acknowledgment before invalid)
+  //now no longer the owner
   transition(MI_A, Fwd_GetS,  SI_A){
      //send Data to Requestor and Dir
      ee_sendDataFromTBEToRequestor;
@@ -877,6 +985,10 @@ machine(L1Cache, "MSI L1 Cache")
      o_popForwardedRequestQueue; 
   }
 
+
+  //transient state between modified and invalid, waiting for writeback acknowledgment
+  //someone else wants a modified copy, forward the data and relinquish ownership
+  //still wait for acknowledgment before going to the invalid state
   transition(MI_A, Fwd_GetM,  II_A){
      //send Data to Requestor
      ee_sendDataFromTBEToRequestor;
@@ -884,18 +996,23 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
 
+
+  //transient state between shared and invalid, waiting for writeback acknowledgment
+  //stall otherwise 
   transition(SI_A, {Load,Ifetch, Store, Replacement},  SI_A){
      //stall 
     z_stall;
   }
 
-
+  //transient state between shared and invalid
+  //received invalidation request from directory and issue an invalidation acknowledgment in return
   transition(SI_A, Inv, II_A){
      //send Inv-Ack to Requestor
      fi_sendInvAck;
      o_popForwardedRequestQueue;
   }
 
+  //transient states waiting for the writeback acknowledgment from the directory before they can invalidate
   transition({MI_A,SI_A, II_A}, WB_Ack,  I){
      //go to invalidate
     h_deallocateL1CacheBlock;
@@ -904,6 +1021,9 @@ machine(L1Cache, "MSI L1 Cache")
     o_popForwardedRequestQueue;
   }
   
+
+  //transient state before invalidating waiting for writeback acknowledgments
+  //stall otherwise
   transition(II_A, {Load,Ifetch, Store, Replacement},  II_A){
      //stall 
     z_stall;

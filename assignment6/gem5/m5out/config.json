@@ -730,7 +730,7 @@
                 "role": "MASTER"
             }, 
             "type": "RubyTester", 
-            "checks_to_complete": 100000
+            "checks_to_complete": 1000000
         }, 
         "sys_port_proxy": {
             "access_phys_mem": true, 
@@ -755,7 +755,7 @@
         "num_work_ids": 16, 
         "path": "system", 
         "ruby": {
-            "random_seed": 1234, 
+            "random_seed": 22, 
             "name": "ruby", 
             "clock": 5e-10, 
             "mem_size": 134217728, 
